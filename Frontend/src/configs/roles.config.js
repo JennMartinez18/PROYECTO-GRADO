@@ -6,6 +6,14 @@ export const ROLES = {
   ODONTOLOGO: 4,
 };
 
+// Rutas bloqueadas explícitamente por rol (tienen prioridad sobre ROLE_ACCESS)
+export const ROLE_BLOCK = {
+  [ROLES.RECEPCIONISTA]: [
+    "/clinica/historias",
+    "/clinica/tratamientos",
+  ],
+};
+
 // Rutas permitidas por rol
 export const ROLE_ACCESS = {
   [ROLES.ADMIN]: [
@@ -42,5 +50,7 @@ export const ROLE_HOME = {
 export const hasAccess = (rolId, path) => {
   const allowed = ROLE_ACCESS[rolId];
   if (!allowed) return false;
+  const blocked = ROLE_BLOCK[rolId] || [];
+  if (blocked.some((prefix) => path.startsWith(prefix))) return false;
   return allowed.some((prefix) => path.startsWith(prefix));
 };

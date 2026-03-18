@@ -336,6 +336,7 @@ function ReporteCitas() {
 function ReporteTratamientos() {
   const [data, setData] = useState(null);
   const [sorting, setSorting] = useState([]);
+  const [sortingCat, setSortingCat] = useState([]);
 
   useEffect(() => {
     axios.get("/reportes/tratamientos")
@@ -353,11 +354,32 @@ function ReporteTratamientos() {
     },
   ], []);
 
+  const columnsCatalogo = useMemo(() => [
+    { accessorKey: "nombre", header: "Tratamiento" },
+    { accessorKey: "especialidad", header: "Especialidad" },
+    {
+      accessorKey: "precio",
+      header: "Precio",
+      cell: ({ getValue }) => <span className="font-semibold text-emerald-600 dark:text-emerald-400">${Number(getValue()).toLocaleString()}</span>,
+    },
+    { accessorKey: "duracion_sesiones", header: "Sesiones" },
+  ], []);
+
   const table = useReactTable({
     data: data?.mas_aplicados || [],
     columns,
     state: { sorting },
     onSortingChange: setSorting,
+    getCoreRowModel: getCoreRowModel(),
+    getSortedRowModel: getSortedRowModel(),
+    getPaginationRowModel: getPaginationRowModel(),
+  });
+
+  const tableCatalogo = useReactTable({
+    data: data?.catalogo || [],
+    columns: columnsCatalogo,
+    state: { sorting: sortingCat },
+    onSortingChange: setSortingCat,
     getCoreRowModel: getCoreRowModel(),
     getSortedRowModel: getSortedRowModel(),
     getPaginationRowModel: getPaginationRowModel(),
@@ -397,31 +419,29 @@ function ReporteTratamientos() {
           )}
 
           {/* Tabla top tratamientos */}
-          <Card className="rounded-xl">
-            <div className="border-b border-gray-200 px-5 py-3 dark:border-dark-500">
-              <h4 className="text-sm font-semibold text-gray-800 dark:text-dark-50">Tratamientos Más Aplicados</h4>
-            </div>
-            <div className="scrollbar-sm min-w-full overflow-x-auto">
-              <Table hoverable className="w-full text-left">
-                <THead>
-                  {table.getHeaderGroups().map((hg) => (
-                    <Tr key={hg.id}>
-                      {hg.headers.map((header) => (
-                        <Th key={header.id} className="cursor-pointer select-none whitespace-nowrap px-4 py-3" onClick={header.column.getToggleSortingHandler()}>
-                          <div className="flex items-center gap-2 text-xs font-semibold uppercase tracking-wider">
-                            {flexRender(header.column.columnDef.header, header.getContext())}
-                            {header.column.getCanSort() && <TableSortIcon sorted={header.column.getIsSorted()} />}
-                          </div>
-                        </Th>
-                      ))}
-                    </Tr>
-                  ))}
-                </THead>
-                <TBody>
-                  {table.getRowModel().rows.length === 0 ? (
-                    <Tr><Td colSpan={columns.length} className="py-8 text-center text-sm text-gray-400">Sin datos</Td></Tr>
-                  ) : (
-                    table.getRowModel().rows.map((row) => (
+          {data.mas_aplicados?.length > 0 && (
+            <Card className="rounded-xl">
+              <div className="border-b border-gray-200 px-5 py-3 dark:border-dark-500">
+                <h4 className="text-sm font-semibold text-gray-800 dark:text-dark-50">Tratamientos Más Aplicados</h4>
+              </div>
+              <div className="scrollbar-sm min-w-full overflow-x-auto">
+                <Table hoverable className="w-full text-left">
+                  <THead>
+                    {table.getHeaderGroups().map((hg) => (
+                      <Tr key={hg.id}>
+                        {hg.headers.map((header) => (
+                          <Th key={header.id} className="cursor-pointer select-none whitespace-nowrap px-4 py-3" onClick={header.column.getToggleSortingHandler()}>
+                            <div className="flex items-center gap-2 text-xs font-semibold uppercase tracking-wider">
+                              {flexRender(header.column.columnDef.header, header.getContext())}
+                              {header.column.getCanSort() && <TableSortIcon sorted={header.column.getIsSorted()} />}
+                            </div>
+                          </Th>
+                        ))}
+                      </Tr>
+                    ))}
+                  </THead>
+                  <TBody>
+                    {table.getRowModel().rows.map((row) => (
                       <Tr key={row.id}>
                         {row.getVisibleCells().map((cell) => (
                           <Td key={cell.id} className="whitespace-nowrap px-4 py-3 text-sm">
@@ -429,15 +449,56 @@ function ReporteTratamientos() {
                           </Td>
                         ))}
                       </Tr>
-                    ))
-                  )}
-                </TBody>
-              </Table>
-            </div>
-            <div className="border-t border-gray-200 px-4 py-3 dark:border-dark-500">
-              <PaginationSection table={table} />
-            </div>
-          </Card>
+                    ))}
+                  </TBody>
+                </Table>
+              </div>
+              <div className="border-t border-gray-200 px-4 py-3 dark:border-dark-500">
+                <PaginationSection table={table} />
+              </div>
+            </Card>
+          )}
+
+          {/* Catálogo de tratamientos disponibles */}
+          {data.catalogo?.length > 0 && (
+            <Card className="rounded-xl">
+              <div className="border-b border-gray-200 px-5 py-3 dark:border-dark-500">
+                <h4 className="text-sm font-semibold text-gray-800 dark:text-dark-50">Catálogo de Tratamientos Disponibles</h4>
+              </div>
+              <div className="scrollbar-sm min-w-full overflow-x-auto">
+                <Table hoverable className="w-full text-left">
+                  <THead>
+                    {tableCatalogo.getHeaderGroups().map((hg) => (
+                      <Tr key={hg.id}>
+                        {hg.headers.map((header) => (
+                          <Th key={header.id} className="cursor-pointer select-none whitespace-nowrap px-4 py-3" onClick={header.column.getToggleSortingHandler()}>
+                            <div className="flex items-center gap-2 text-xs font-semibold uppercase tracking-wider">
+                              {flexRender(header.column.columnDef.header, header.getContext())}
+                              {header.column.getCanSort() && <TableSortIcon sorted={header.column.getIsSorted()} />}
+                            </div>
+                          </Th>
+                        ))}
+                      </Tr>
+                    ))}
+                  </THead>
+                  <TBody>
+                    {tableCatalogo.getRowModel().rows.map((row) => (
+                      <Tr key={row.id}>
+                        {row.getVisibleCells().map((cell) => (
+                          <Td key={cell.id} className="whitespace-nowrap px-4 py-3 text-sm">
+                            {flexRender(cell.column.columnDef.cell, cell.getContext())}
+                          </Td>
+                        ))}
+                      </Tr>
+                    ))}
+                  </TBody>
+                </Table>
+              </div>
+              <div className="border-t border-gray-200 px-4 py-3 dark:border-dark-500">
+                <PaginationSection table={tableCatalogo} />
+              </div>
+            </Card>
+          )}
         </>
       )}
     </div>

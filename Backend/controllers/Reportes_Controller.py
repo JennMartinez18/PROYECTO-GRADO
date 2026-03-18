@@ -153,6 +153,16 @@ class ReportesControllerClass:
             cursor.execute("SELECT COUNT(*) AS total FROM historia_tratamientos WHERE estado = 'Completado'")
             completados = cursor.fetchone()["total"]
 
+            # Catálogo de tratamientos disponibles
+            cursor.execute(
+                "SELECT t.nombre, t.precio, COALESCE(e.nombre, 'General') AS especialidad, "
+                "t.duracion_sesiones "
+                "FROM tratamientos t "
+                "LEFT JOIN especialidades e ON t.especialidad_id = e.id "
+                "WHERE t.activo = 1 ORDER BY t.nombre"
+            )
+            catalogo = cursor.fetchall()
+
             conn.close()
             return {
                 "resultado": {
@@ -161,6 +171,7 @@ class ReportesControllerClass:
                     "ingresos_total": ingresos_total,
                     "activos": activos,
                     "completados": completados,
+                    "catalogo": jsonable_encoder(catalogo),
                 }
             }
         except Exception as error:

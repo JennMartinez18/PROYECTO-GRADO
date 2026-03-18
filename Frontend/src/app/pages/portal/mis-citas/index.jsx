@@ -7,15 +7,23 @@ import {
   ClockIcon,
   CheckCircleIcon,
   XCircleIcon,
+  PlusIcon,
+  XMarkIcon,
+  ChevronLeftIcon,
+  ChevronRightIcon,
 } from "@heroicons/react/24/outline";
 import axios from "utils/axios";
 import { useAuthContext } from "app/contexts/auth/context";
 import { toast } from "sonner";
+import dayjs from "dayjs";
+import "dayjs/locale/es";
+dayjs.locale("es");
 
 export default function MisCitas() {
   const { user } = useAuthContext();
   const [citas, setCitas] = useState([]);
   const [filtro, setFiltro] = useState("todas");
+  const [showModal, setShowModal] = useState(false);
 
   const fetchCitas = useCallback(async () => {
     if (!user?.paciente_id) return;
@@ -66,14 +74,23 @@ export default function MisCitas() {
   return (
     <Page title="Mis Citas">
       <div className="transition-content w-full px-(--margin-x) pb-8 pt-5 lg:pt-6">
-        <div className="flex items-center gap-3">
-          <div className="flex size-10 items-center justify-center rounded-xl bg-gradient-to-br from-indigo-500 to-blue-600 text-white shadow-md">
-            <CalendarDaysIcon className="size-5" />
+        <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
+          <div className="flex items-center gap-3">
+            <div className="flex size-10 items-center justify-center rounded-xl bg-gradient-to-br from-indigo-500 to-blue-600 text-white shadow-md">
+              <CalendarDaysIcon className="size-5" />
+            </div>
+            <div>
+              <h2 className="text-xl font-bold text-gray-800 dark:text-dark-50">Mis Citas</h2>
+              <p className="text-sm text-gray-400 dark:text-dark-300">{citas.length} cita(s) registradas</p>
+            </div>
           </div>
-          <div>
-            <h2 className="text-xl font-bold text-gray-800 dark:text-dark-50">Mis Citas</h2>
-            <p className="text-sm text-gray-400 dark:text-dark-300">{citas.length} cita(s) registradas</p>
-          </div>
+          <button
+            onClick={() => setShowModal(true)}
+            className="inline-flex items-center gap-2 rounded-xl bg-indigo-600 px-5 py-2.5 text-sm font-semibold text-white shadow-md transition-colors hover:bg-indigo-700"
+          >
+            <PlusIcon className="size-4" />
+            Programar Cita
+          </button>
         </div>
 
         {/* Tabs */}
@@ -150,6 +167,353 @@ export default function MisCitas() {
           )}
         </div>
       </div>
+
+      {/* Modal Programar Cita */}
+      {showModal && (
+        <ModalProgramarCita
+          user={user}
+          onClose={() => setShowModal(false)}
+          onSuccess={() => { setShowModal(false); fetchCitas(); }}
+        />
+      )}
     </Page>
+  );
+}
+
+// ═══════════════════════════════════════════════
+// Modal para Programar Cita
+// ═══════════════════════════════════════════════
+function ModalProgramarCita({ user, onClose, onSuccess }) {
+  const [step, setStep] = useState(1);
+  const [especialidades, setEspecialidades] = useState([]);
+  const [doctores, setDoctores] = useState([]);
+  const [slots, setSlots] = useState([]);
+  const [loading, setLoading] = useState(false);
+
+  // Form state
+  const [especialidadId, setEspecialidadId] = useState("");
+  const [doctorId, setDoctorId] = useState("");
+  const [doctorNombre, setDoctorNombre] = useState("");
+  const [fecha, setFecha] = useState("");
+  const [horaSeleccionada, setHoraSeleccionada] = useState("");
+  const [consultorio, setConsultorio] = useState("");
+  const [motivo, setMotivo] = useState("");
+  const [observaciones, setObservaciones] = useState("");
+
+  // Calendario mini
+  const [calMonth, setCalMonth] = useState(dayjs());
+
+  // Cargar especialidades al iniciar
+  useEffect(() => {
+    axios.get("/especialidades").then((r) => {
+      if (Array.isArray(r.data.resultado)) setEspecialidades(r.data.resultado);
+    }).catch(() => {});
+  }, []);
+
+  // Cargar doctores
+  useEffect(() => {
+    axios.get("/usuarios/doctores").then((r) => {
+      if (Array.isArray(r.data.resultado)) setDoctores(r.data.resultado);
+    }).catch(() => {
+      toast.error("No se pudieron cargar los doctores");
+    });
+  }, []);
+
+  // Cargar horarios al cambiar fecha o doctor
+  useEffect(() => {
+    if (!fecha || !doctorId) { setSlots([]); return; }
+    setLoading(true);
+    axios.get(`/citas/horarios-disponibles?fecha=${fecha}&usuario_id=${doctorId}`)
+      .then((r) => { if (Array.isArray(r.data.resultado)) setSlots(r.data.resultado); })
+      .catch(() => {})
+      .finally(() => setLoading(false));
+  }, [fecha, doctorId]);
+
+  const handleSelectDoctor = (doc) => {
+    setDoctorId(doc.id);
+    setDoctorNombre(`${doc.nombre} ${doc.apellido}`);
+    setStep(2);
+  };
+
+  const handleSelectSlot = (hora, cons) => {
+    setHoraSeleccionada(hora);
+    setConsultorio(cons);
+    setStep(3);
+  };
+
+  const handleSubmit = async (e) => {
+    e.preventDefault();
+    if (!doctorId || !fecha || !horaSeleccionada || !consultorio) return;
+    setLoading(true);
+    try {
+      const payload = {
+        paciente_id: user.paciente_id,
+        usuario_id: Number(doctorId),
+        especialidad_id: Number(especialidadId) || 1,
+        fecha,
+        hora: horaSeleccionada,
+        estado: "Programada",
+        observaciones: observaciones || null,
+        motivo_consulta: motivo || null,
+        consultorio,
+      };
+      const res = await axios.post("/citas", payload);
+      if (res.data.informacion?.toLowerCase().includes("exitosa")) {
+        toast.success("¡Cita programada exitosamente!");
+        onSuccess();
+      } else {
+        toast.error(res.data.informacion || "No se pudo programar la cita");
+      }
+    } catch {
+      toast.error("Error al programar la cita");
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  // Helpers calendario
+  const today = dayjs();
+  const startOfMonth = calMonth.startOf("month");
+  const startDay = startOfMonth.day(); // 0=dom
+  const daysInMonth = calMonth.daysInMonth();
+  const maxDate = today.add(60, "day");
+
+  const diasSemana = ["Dom", "Lun", "Mar", "Mié", "Jue", "Vie", "Sáb"];
+
+  const inputClass =
+    "w-full rounded-xl border border-gray-200 bg-gray-50 px-4 py-2.5 text-sm transition-all focus:border-indigo-400 focus:bg-white focus:outline-none focus:ring-2 focus:ring-indigo-400/20 dark:border-dark-500 dark:bg-dark-600 dark:text-dark-100 dark:focus:border-indigo-400 dark:focus:bg-dark-700";
+
+  return (
+    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4">
+      <div className="relative max-h-[90vh] w-full max-w-lg overflow-y-auto rounded-2xl bg-white p-6 shadow-xl dark:bg-dark-700">
+        <button onClick={onClose} className="absolute right-4 top-4 rounded-lg p-1 text-gray-400 hover:bg-gray-100 hover:text-gray-600 dark:hover:bg-dark-600">
+          <XMarkIcon className="size-5" />
+        </button>
+
+        {/* Header */}
+        <div className="flex items-center gap-3">
+          <div className="flex size-10 items-center justify-center rounded-xl bg-gradient-to-br from-indigo-500 to-blue-600 text-white">
+            <CalendarDaysIcon className="size-5" />
+          </div>
+          <div>
+            <h3 className="text-lg font-bold text-gray-800 dark:text-dark-50">Programar Cita</h3>
+            <p className="text-xs text-gray-400 dark:text-dark-300">Paso {step} de 3</p>
+          </div>
+        </div>
+
+        {/* Steps indicator */}
+        <div className="mt-4 flex gap-1.5">
+          {[1, 2, 3].map((s) => (
+            <div key={s} className={`h-1.5 flex-1 rounded-full transition-colors ${s <= step ? "bg-indigo-500" : "bg-gray-200 dark:bg-dark-500"}`} />
+          ))}
+        </div>
+
+        {/* ─── STEP 1: Especialidad + Doctor ─── */}
+        {step === 1 && (
+          <div className="mt-5 space-y-4">
+            <div>
+              <label className="mb-1.5 block text-sm font-medium text-gray-700 dark:text-dark-200">Especialidad (opcional)</label>
+              <select
+                value={especialidadId}
+                onChange={(e) => { setEspecialidadId(e.target.value); setDoctorId(""); }}
+                className={inputClass}
+              >
+                <option value="">Todas las especialidades</option>
+                {especialidades.map((esp) => (
+                  <option key={esp.id} value={esp.id}>{esp.nombre}</option>
+                ))}
+              </select>
+            </div>
+            <div>
+              <label className="mb-1.5 block text-sm font-medium text-gray-700 dark:text-dark-200">Selecciona un Doctor</label>
+              {doctores.length === 0 ? (
+                <p className="py-4 text-center text-sm text-gray-400">No hay doctores disponibles</p>
+              ) : (
+                <div className="max-h-52 space-y-2 overflow-y-auto">
+                  {doctores.map((doc) => (
+                    <button
+                      key={doc.id}
+                      onClick={() => handleSelectDoctor(doc)}
+                      className={`flex w-full items-center gap-3 rounded-xl border p-3 text-left transition-all hover:border-indigo-400 hover:bg-indigo-50 dark:hover:border-indigo-400 dark:hover:bg-indigo-500/10 ${
+                        doctorId === doc.id
+                          ? "border-indigo-400 bg-indigo-50 dark:border-indigo-400 dark:bg-indigo-500/10"
+                          : "border-gray-200 dark:border-dark-500"
+                      }`}
+                    >
+                      <div className="flex size-9 items-center justify-center rounded-lg bg-indigo-100 text-sm font-bold text-indigo-600 dark:bg-indigo-500/20 dark:text-indigo-400">
+                        {doc.nombre?.[0]}{doc.apellido?.[0]}
+                      </div>
+                      <div>
+                        <p className="text-sm font-semibold text-gray-800 dark:text-dark-50">Dr./Dra. {doc.nombre} {doc.apellido}</p>
+                        {doc.especialidad_nombre && (
+                          <p className="text-xs text-gray-400 dark:text-dark-300">{doc.especialidad_nombre}</p>
+                        )}
+                      </div>
+                    </button>
+                  ))}
+                </div>
+              )}
+            </div>
+          </div>
+        )}
+
+        {/* ─── STEP 2: Fecha + Horario ─── */}
+        {step === 2 && (
+          <div className="mt-5 space-y-4">
+            <p className="text-sm text-gray-500 dark:text-dark-300">
+              Doctor: <span className="font-semibold text-gray-800 dark:text-dark-50">{doctorNombre}</span>
+            </p>
+
+            {/* Mini Calendario */}
+            <div>
+              <div className="flex items-center justify-between">
+                <button
+                  onClick={() => setCalMonth(calMonth.subtract(1, "month"))}
+                  disabled={calMonth.isSame(today, "month")}
+                  className="rounded-lg p-1.5 text-gray-400 hover:bg-gray-100 disabled:opacity-30 dark:hover:bg-dark-600"
+                >
+                  <ChevronLeftIcon className="size-4" />
+                </button>
+                <span className="text-sm font-semibold capitalize text-gray-800 dark:text-dark-50">
+                  {calMonth.format("MMMM YYYY")}
+                </span>
+                <button
+                  onClick={() => setCalMonth(calMonth.add(1, "month"))}
+                  disabled={calMonth.add(1, "month").startOf("month").isAfter(maxDate)}
+                  className="rounded-lg p-1.5 text-gray-400 hover:bg-gray-100 disabled:opacity-30 dark:hover:bg-dark-600"
+                >
+                  <ChevronRightIcon className="size-4" />
+                </button>
+              </div>
+              <div className="mt-2 grid grid-cols-7 gap-1 text-center">
+                {diasSemana.map((d) => (
+                  <div key={d} className="py-1 text-[10px] font-semibold uppercase text-gray-400">{d}</div>
+                ))}
+                {Array.from({ length: startDay }).map((_, i) => (
+                  <div key={`e-${i}`} />
+                ))}
+                {Array.from({ length: daysInMonth }).map((_, i) => {
+                  const d = calMonth.date(i + 1);
+                  const isPast = d.isBefore(today, "day");
+                  const isTooFar = d.isAfter(maxDate, "day");
+                  const isSunday = d.day() === 0;
+                  const disabled = isPast || isTooFar || isSunday;
+                  const isSelected = fecha === d.format("YYYY-MM-DD");
+                  return (
+                    <button
+                      key={i}
+                      disabled={disabled}
+                      onClick={() => { setFecha(d.format("YYYY-MM-DD")); setHoraSeleccionada(""); setConsultorio(""); }}
+                      className={`rounded-lg py-1.5 text-xs font-medium transition-all ${
+                        isSelected
+                          ? "bg-indigo-600 text-white shadow-md"
+                          : disabled
+                            ? "text-gray-300 dark:text-dark-500"
+                            : "text-gray-700 hover:bg-indigo-50 dark:text-dark-200 dark:hover:bg-indigo-500/10"
+                      }`}
+                    >
+                      {i + 1}
+                    </button>
+                  );
+                })}
+              </div>
+            </div>
+
+            {/* Horarios disponibles */}
+            {fecha && (
+              <div>
+                <label className="mb-1.5 block text-sm font-medium text-gray-700 dark:text-dark-200">
+                  Horarios disponibles — {dayjs(fecha).format("dddd D [de] MMMM")}
+                </label>
+                {loading ? (
+                  <p className="py-4 text-center text-sm text-gray-400">Cargando horarios...</p>
+                ) : slots.length === 0 ? (
+                  <p className="py-4 text-center text-sm text-gray-400">No hay horarios disponibles este día</p>
+                ) : (
+                  <div className="grid grid-cols-3 gap-2 sm:grid-cols-4">
+                    {slots.map((slot) => (
+                      <button
+                        key={slot.hora}
+                        onClick={() => handleSelectSlot(slot.hora, slot.consultorios_disponibles[0])}
+                        className={`rounded-xl border px-3 py-2.5 text-center text-sm font-medium transition-all ${
+                          horaSeleccionada === slot.hora
+                            ? "border-indigo-500 bg-indigo-50 text-indigo-700 dark:border-indigo-400 dark:bg-indigo-500/15 dark:text-indigo-400"
+                            : "border-gray-200 text-gray-700 hover:border-indigo-300 hover:bg-indigo-50/50 dark:border-dark-500 dark:text-dark-200 dark:hover:border-indigo-400"
+                        }`}
+                      >
+                        {slot.hora}
+                      </button>
+                    ))}
+                  </div>
+                )}
+              </div>
+            )}
+
+            {/* Navegación */}
+            <div className="flex gap-3 pt-2">
+              <button onClick={() => setStep(1)} className="flex-1 rounded-xl border border-gray-200 px-4 py-2.5 text-sm font-medium text-gray-600 hover:bg-gray-50 dark:border-dark-500 dark:text-dark-200 dark:hover:bg-dark-600">
+                Atrás
+              </button>
+              <button
+                onClick={() => setStep(3)}
+                disabled={!horaSeleccionada}
+                className="flex-1 rounded-xl bg-indigo-600 px-4 py-2.5 text-sm font-medium text-white shadow-md transition-colors hover:bg-indigo-700 disabled:opacity-40"
+              >
+                Continuar
+              </button>
+            </div>
+          </div>
+        )}
+
+        {/* ─── STEP 3: Motivo + Confirmar ─── */}
+        {step === 3 && (
+          <form onSubmit={handleSubmit} className="mt-5 space-y-4">
+            {/* Resumen */}
+            <Card className="space-y-1.5 rounded-xl bg-indigo-50/60 p-4 dark:bg-indigo-500/10">
+              <p className="text-xs font-semibold uppercase tracking-wider text-indigo-500">Resumen de tu cita</p>
+              <p className="text-sm text-gray-700 dark:text-dark-200"><span className="font-medium">Doctor:</span> {doctorNombre}</p>
+              <p className="text-sm text-gray-700 dark:text-dark-200"><span className="font-medium">Fecha:</span> {dayjs(fecha).format("dddd D [de] MMMM, YYYY")}</p>
+              <p className="text-sm text-gray-700 dark:text-dark-200"><span className="font-medium">Hora:</span> {horaSeleccionada}</p>
+              <p className="text-sm text-gray-700 dark:text-dark-200"><span className="font-medium">Consultorio:</span> {consultorio}</p>
+            </Card>
+
+            <div>
+              <label className="mb-1.5 block text-sm font-medium text-gray-700 dark:text-dark-200">Motivo de consulta *</label>
+              <textarea
+                value={motivo}
+                onChange={(e) => setMotivo(e.target.value)}
+                required
+                rows={2}
+                placeholder="Describe brevemente el motivo de tu visita"
+                className={inputClass}
+              />
+            </div>
+            <div>
+              <label className="mb-1.5 block text-sm font-medium text-gray-700 dark:text-dark-200">Observaciones (opcional)</label>
+              <textarea
+                value={observaciones}
+                onChange={(e) => setObservaciones(e.target.value)}
+                rows={2}
+                placeholder="Alergias, medicamentos actuales, etc."
+                className={inputClass}
+              />
+            </div>
+
+            <div className="flex gap-3 pt-2">
+              <button type="button" onClick={() => setStep(2)} className="flex-1 rounded-xl border border-gray-200 px-4 py-2.5 text-sm font-medium text-gray-600 hover:bg-gray-50 dark:border-dark-500 dark:text-dark-200 dark:hover:bg-dark-600">
+                Atrás
+              </button>
+              <button
+                type="submit"
+                disabled={loading || !motivo.trim()}
+                className="flex-1 rounded-xl bg-indigo-600 px-4 py-2.5 text-sm font-medium text-white shadow-md transition-colors hover:bg-indigo-700 disabled:opacity-40"
+              >
+                {loading ? "Programando..." : "Confirmar Cita"}
+              </button>
+            </div>
+          </form>
+        )}
+      </div>
+    </div>
   );
 }

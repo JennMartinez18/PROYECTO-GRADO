@@ -8,6 +8,14 @@ import {
   MagnifyingGlassIcon,
   XMarkIcon,
   UserGroupIcon,
+  ClipboardDocumentListIcon,
+  EyeIcon,
+  PhoneIcon,
+  EnvelopeIcon,
+  MapPinIcon,
+  HeartIcon,
+  UserIcon,
+  CalendarDaysIcon,
 } from "@heroicons/react/24/outline";
 import axios from "utils/axios";
 import { toast } from "sonner";
@@ -43,6 +51,10 @@ export default function Pacientes() {
   const [form, setForm] = useState(emptyForm);
   const [editId, setEditId] = useState(null);
   const [errors, setErrors] = useState({});
+  const [showExpediente, setShowExpediente] = useState(false);
+  const [expedientePac, setExpedientePac] = useState(null);
+  const [historias, setHistorias] = useState([]);
+  const [loadingHistorias, setLoadingHistorias] = useState(false);
 
   const fetchPacientes = useCallback(async () => {
     try {
@@ -126,6 +138,21 @@ export default function Pacientes() {
     setShowModal(true);
   };
 
+  const handleVerExpediente = async (pac) => {
+    setExpedientePac(pac);
+    setHistorias([]);
+    setShowExpediente(true);
+    setLoadingHistorias(true);
+    try {
+      const res = await axios.get(`/historias-clinicas/paciente/${pac.id}`);
+      if (Array.isArray(res.data.resultado)) setHistorias(res.data.resultado);
+    } catch {
+      toast.error("No se pudo cargar el expediente");
+    } finally {
+      setLoadingHistorias(false);
+    }
+  };
+
   // --- TanStack Table ---
   const [sorting, setSorting] = useState([]);
 
@@ -190,6 +217,13 @@ export default function Pacientes() {
         const pac = row.original;
         return (
           <div className="flex items-center gap-1">
+            <button
+              onClick={() => handleVerExpediente(pac)}
+              title="Ver expediente"
+              className="rounded-lg p-1.5 text-gray-400 transition-colors hover:bg-violet-50 hover:text-violet-600 dark:hover:bg-violet-500/10 dark:hover:text-violet-400"
+            >
+              <ClipboardDocumentListIcon className="size-4" />
+            </button>
             <button onClick={() => handleEdit(pac)} className="rounded-lg p-1.5 text-gray-400 transition-colors hover:bg-gray-100 hover:text-indigo-600 dark:hover:bg-dark-600 dark:hover:text-indigo-400">
               <PencilSquareIcon className="size-4" />
             </button>
@@ -292,6 +326,117 @@ export default function Pacientes() {
             <PaginationSection table={table} />
           </div>
         </Card>
+
+        {/* Modal Expediente */}
+        {showExpediente && expedientePac && (
+          <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/40 backdrop-blur-sm">
+            <Card className="w-full max-w-2xl max-h-[90vh] overflow-y-auto rounded-2xl p-6 shadow-2xl">
+              {/* Header */}
+              <div className="flex items-start justify-between gap-4">
+                <div className="flex items-center gap-3">
+                  <div className="flex size-10 items-center justify-center rounded-xl bg-gradient-to-br from-violet-500 to-purple-600 text-white shadow">
+                    <ClipboardDocumentListIcon className="size-5" />
+                  </div>
+                  <div>
+                    <h3 className="text-lg font-bold text-gray-800 dark:text-dark-50">Expediente del Paciente</h3>
+                    <p className="text-xs text-gray-400 dark:text-dark-300">Solo lectura</p>
+                  </div>
+                </div>
+                <button onClick={() => setShowExpediente(false)} className="rounded-lg p-1.5 text-gray-400 transition-colors hover:bg-gray-100 dark:hover:bg-dark-600">
+                  <XMarkIcon className="size-5" />
+                </button>
+              </div>
+
+              {/* Datos del Paciente */}
+              <div className="mt-5 rounded-xl bg-violet-50 p-4 dark:bg-violet-500/10">
+                <div className="flex items-center gap-3">
+                  <div className="flex size-12 items-center justify-center rounded-full bg-violet-200 text-lg font-bold text-violet-700 dark:bg-violet-500/30 dark:text-violet-300">
+                    {expedientePac.nombre?.[0]}{expedientePac.apellido?.[0]}
+                  </div>
+                  <div>
+                    <p className="text-base font-bold text-violet-800 dark:text-violet-200">{expedientePac.nombre} {expedientePac.apellido}</p>
+                    <p className="text-xs text-violet-500 dark:text-violet-400">CI: {expedientePac.cedula}</p>
+                  </div>
+                  {expedientePac.tipo_sangre && (
+                    <span className="ml-auto rounded-full bg-rose-100 px-3 py-1 text-xs font-bold text-rose-700 dark:bg-rose-500/20 dark:text-rose-300">
+                      {expedientePac.tipo_sangre}
+                    </span>
+                  )}
+                </div>
+                <div className="mt-3 grid grid-cols-2 gap-2 sm:grid-cols-3">
+                  {[
+                    { icon: CalendarDaysIcon, label: "Nacimiento", value: expedientePac.fecha_nacimiento?.split("T")[0] },
+                    { icon: UserIcon, label: "Género", value: expedientePac.genero === "M" ? "Masculino" : expedientePac.genero === "F" ? "Femenino" : expedientePac.genero },
+                    { icon: PhoneIcon, label: "Teléfono", value: expedientePac.telefono },
+                    { icon: EnvelopeIcon, label: "Email", value: expedientePac.email },
+                    { icon: MapPinIcon, label: "Dirección", value: expedientePac.direccion },
+                    { icon: HeartIcon, label: "Contacto emergencia", value: expedientePac.contacto_emergencia ? `${expedientePac.contacto_emergencia} ${expedientePac.telefono_emergencia || ""}`.trim() : null },
+                  ].filter((i) => i.value).map((item) => (
+                    <div key={item.label} className="flex items-start gap-1.5">
+                      <item.icon className="mt-0.5 size-3.5 shrink-0 text-violet-400" />
+                      <div>
+                        <p className="text-[10px] uppercase tracking-wider text-violet-400">{item.label}</p>
+                        <p className="text-xs text-violet-700 dark:text-violet-200 break-words">{item.value}</p>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              </div>
+
+              {/* Historias Clínicas */}
+              <div className="mt-5">
+                <div className="flex items-center gap-2 mb-3">
+                  <EyeIcon className="size-4 text-gray-400" />
+                  <h4 className="text-sm font-semibold text-gray-700 dark:text-dark-100">Historias Clínicas</h4>
+                  <span className="rounded-full bg-gray-100 px-2 py-0.5 text-xs text-gray-500 dark:bg-dark-600 dark:text-dark-300">
+                    {historias.length} registro{historias.length !== 1 ? "s" : ""}
+                  </span>
+                </div>
+
+                {loadingHistorias ? (
+                  <div className="py-8 text-center text-sm text-gray-400">Cargando...</div>
+                ) : historias.length === 0 ? (
+                  <div className="rounded-xl border border-dashed border-gray-200 py-8 text-center dark:border-dark-500">
+                    <ClipboardDocumentListIcon className="mx-auto size-8 text-gray-200 dark:text-dark-500" />
+                    <p className="mt-2 text-sm text-gray-400 dark:text-dark-300">Sin historias clínicas registradas</p>
+                  </div>
+                ) : (
+                  <div className="space-y-3">
+                    {historias.map((h) => (
+                      <div key={h.id} className="rounded-xl border border-gray-200 bg-gray-50 p-4 dark:border-dark-500 dark:bg-dark-700">
+                        <div className="flex items-center justify-between gap-2">
+                          <div className="flex items-center gap-2">
+                            <CalendarDaysIcon className="size-4 text-violet-400" />
+                            <span className="text-xs font-semibold text-gray-600 dark:text-dark-200">{h.fecha_atencion?.split("T")[0] || "—"}</span>
+                          </div>
+                          <span className="text-xs text-gray-400 dark:text-dark-300">Dr. {h.doctor_nombre || ""} {h.doctor_apellido || ""}</span>
+                        </div>
+                        <div className="mt-3 grid grid-cols-1 gap-2 sm:grid-cols-2">
+                          {[
+                            { label: "Motivo", value: h.motivo_consulta },
+                            { label: "Diagnóstico", value: h.diagnostico },
+                            { label: "Observaciones", value: h.observaciones },
+                            { label: "Recomendaciones", value: h.recomendaciones },
+                            { label: "Próxima cita", value: h.proxima_cita?.split("T")[0] },
+                          ].filter((i) => i.value).map((item) => (
+                            <div key={item.label}>
+                              <p className="text-[10px] uppercase tracking-wider text-gray-400 dark:text-dark-300">{item.label}</p>
+                              <p className="mt-0.5 text-xs text-gray-700 dark:text-dark-100">{item.value}</p>
+                            </div>
+                          ))}
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                )}
+              </div>
+
+              <div className="mt-5 flex justify-end">
+                <Button variant="outlined" className="rounded-xl" onClick={() => setShowExpediente(false)}>Cerrar</Button>
+              </div>
+            </Card>
+          </div>
+        )}
 
         {/* Modal */}
         {showModal && (

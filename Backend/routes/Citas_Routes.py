@@ -1,7 +1,8 @@
-from fastapi import APIRouter, Depends
+from fastapi import APIRouter, Depends, Query
 from controllers.Citas_Controller import Citas_Controller
 from models.Citas_Model import Cita, CambiarEstadoCita
 from config.auth import get_current_user, require_staff
+from typing import Optional
 
 router = APIRouter()
 
@@ -57,6 +58,45 @@ async def verificar_disponibilidad(
     current_user: dict = Depends(get_current_user),
 ):
     return Citas_Controller.verificar_disponibilidad(fecha, hora, usuario_id, consultorio)
+
+
+@router.get(
+    "/citas/doctores-especialidad",
+    summary="Doctores para Agendar",
+    description="Lista doctores activos, opcionalmente filtrados por especialidad.",
+    response_description="Lista de doctores",
+)
+async def listar_doctores_disponibles(
+    especialidad_id: Optional[int] = Query(None),
+    current_user: dict = Depends(get_current_user),
+):
+    return Citas_Controller.listar_doctores_disponibles(especialidad_id)
+
+
+@router.get(
+    "/citas/horarios-disponibles",
+    summary="Horarios Disponibles",
+    description="Devuelve slots de 30 min disponibles para un doctor en una fecha.",
+    response_description="Lista de horarios disponibles",
+)
+async def horarios_disponibles(
+    fecha: str = Query(...), usuario_id: int = Query(...),
+    current_user: dict = Depends(get_current_user),
+):
+    return Citas_Controller.horarios_disponibles(fecha, usuario_id)
+
+
+@router.get(
+    "/citas/doctor/{usuario_id}/rango",
+    summary="Citas por Rango",
+    description="Obtiene citas de un doctor en un rango de fechas para vista de calendario.",
+    response_description="Lista de citas en rango",
+)
+async def buscar_por_doctor_rango(
+    usuario_id: int, desde: str = Query(...), hasta: str = Query(...),
+    current_user: dict = Depends(get_current_user),
+):
+    return Citas_Controller.buscar_por_doctor_rango(usuario_id, desde, hasta)
 
 
 @router.get(

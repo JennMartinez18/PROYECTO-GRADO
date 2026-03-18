@@ -118,9 +118,15 @@ class FacturasController:
                 conn.close()
                 return {"informacion": "La factura no se encuentra en la base de datos"}
 
+            # Auto-asignar fecha_pago si se marca como Pagada y no viene fecha
+            fecha_pago = datos.fecha_pago
+            if datos.estado == "Pagada" and not fecha_pago:
+                from datetime import date
+                fecha_pago = date.today().isoformat()
+
             cursor.execute(
                 "UPDATE facturas SET estado=%s, metodo_pago=%s, fecha_pago=%s WHERE id=%s",
-                (datos.estado, datos.metodo_pago, datos.fecha_pago, id),
+                (datos.estado, datos.metodo_pago, fecha_pago, id),
             )
             conn.commit()
             conn.close()

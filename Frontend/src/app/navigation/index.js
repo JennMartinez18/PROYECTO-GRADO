@@ -18,10 +18,12 @@ const adminRecepcion = {
     childs: administracion.childs.filter((c) => c.id === "admin.facturas"),
 };
 
-// Clínica para recepcionista: sin Tratamientos
+// Clínica para recepcionista: sin Tratamientos ni Historias Clínicas
 const clinicaRecepcion = {
     ...clinica,
-    childs: clinica.childs.filter((c) => c.id !== "clinica.tratamientos"),
+    childs: clinica.childs.filter(
+        (c) => c.id !== "clinica.tratamientos" && c.id !== "clinica.historias"
+    ),
 };
 
 // Navegación por rol

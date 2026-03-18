@@ -1,6 +1,13 @@
 from config.db_config import get_db_connection
 from models.Citas_Model import Cita, CambiarEstadoCita
 from fastapi.encoders import jsonable_encoder
+from datetime import datetime, timedelta
+
+
+# Horario de atención
+HORA_INICIO = 8   # 08:00
+HORA_FIN = 18     # 18:00
+DURACION_SLOT = 30 # minutos
 
 
 class CitasController:
@@ -218,6 +225,114 @@ class CitasController:
             conn.commit()
             conn.close()
             return {"informacion": "Cita eliminada"}
+        except Exception as error:
+            return {"resultado": str(error)}
+
+    # ── Nuevos métodos para programación de citas ──
+
+    def listar_doctores_disponibles(self, especialidad_id: int = None):
+        """Devuelve doctores activos, opcionalmente filtrados por especialidad."""
+        try:
+            conn = get_db_connection()
+            cursor = conn.cursor(dictionary=True)
+            if especialidad_id:
+                cursor.execute(
+                    "SELECT DISTINCT u.id, u.nombre, u.apellido, e.id AS especialidad_id, "
+                    "e.nombre AS especialidad_nombre "
+                    "FROM usuarios u "
+                    "JOIN citas c ON c.usuario_id = u.id "
+                    "JOIN especialidades e ON c.especialidad_id = e.id AND e.id = %s "
+                    "WHERE u.rol_id = 4 AND u.activo = 1 "
+                    "UNION "
+                    "SELECT u.id, u.nombre, u.apellido, e.id AS especialidad_id, "
+                    "e.nombre AS especialidad_nombre "
+                    "FROM usuarios u, especialidades e "
+                    "WHERE u.rol_id = 4 AND u.activo = 1 AND e.id = %s "
+                    "ORDER BY nombre, apellido",
+                    (especialidad_id, especialidad_id),
+                )
+            else:
+                cursor.execute(
+                    "SELECT u.id, u.nombre, u.apellido "
+                    "FROM usuarios u WHERE u.rol_id = 4 AND u.activo = 1 "
+                    "ORDER BY u.nombre, u.apellido"
+                )
+            result = cursor.fetchall()
+            conn.close()
+            return {"resultado": jsonable_encoder(result)}
+        except Exception as error:
+            return {"resultado": str(error)}
+
+    def horarios_disponibles(self, fecha: str, usuario_id: int):
+        """Devuelve los slots de 30 min disponibles para un doctor en una fecha."""
+        try:
+            conn = get_db_connection()
+            cursor = conn.cursor(dictionary=True)
+
+            # Citas activas del doctor en esa fecha
+            cursor.execute(
+                "SELECT hora, consultorio FROM citas "
+                "WHERE fecha = %s AND usuario_id = %s "
+                "AND estado NOT IN ('Cancelada', 'No_Asistio')",
+                (fecha, usuario_id),
+            )
+            ocupados = cursor.fetchall()
+            conn.close()
+
+            # Set de (hora_str, consultorio) ocupados
+            ocupados_set = set()
+            for o in ocupados:
+                h = o["hora"]
+                if isinstance(h, timedelta):
+                    total_sec = int(h.total_seconds())
+                    hh = total_sec // 3600
+                    mm = (total_sec % 3600) // 60
+                    h = f"{hh:02d}:{mm:02d}"
+                else:
+                    h = str(h)[:5]
+                ocupados_set.add((h, str(o["consultorio"])))
+
+            # Generar todos los slots
+            slots = []
+            current = datetime.strptime(f"{HORA_INICIO:02d}:00", "%H:%M")
+            end = datetime.strptime(f"{HORA_FIN:02d}:00", "%H:%M")
+            while current < end:
+                hora_str = current.strftime("%H:%M")
+                consultorios_libres = []
+                for cons in ["1", "2"]:
+                    if (hora_str, cons) not in ocupados_set:
+                        consultorios_libres.append(cons)
+                if consultorios_libres:
+                    slots.append({
+                        "hora": hora_str,
+                        "consultorios_disponibles": consultorios_libres,
+                    })
+                current += timedelta(minutes=DURACION_SLOT)
+
+            return {"resultado": slots}
+        except Exception as error:
+            return {"resultado": str(error)}
+
+    def buscar_por_doctor_rango(self, usuario_id: int, desde: str, hasta: str):
+        """Devuelve citas de un doctor en un rango de fechas (para calendario)."""
+        try:
+            conn = get_db_connection()
+            cursor = conn.cursor(dictionary=True)
+            cursor.execute(
+                "SELECT c.*, p.nombre AS paciente_nombre, p.apellido AS paciente_apellido, "
+                "u.nombre AS doctor_nombre, u.apellido AS doctor_apellido, "
+                "e.nombre AS especialidad_nombre "
+                "FROM citas c "
+                "JOIN pacientes p ON c.paciente_id = p.id "
+                "JOIN usuarios u ON c.usuario_id = u.id "
+                "JOIN especialidades e ON c.especialidad_id = e.id "
+                "WHERE c.usuario_id = %s AND c.fecha BETWEEN %s AND %s "
+                "ORDER BY c.fecha, c.hora",
+                (usuario_id, desde, hasta),
+            )
+            result = cursor.fetchall()
+            conn.close()
+            return {"resultado": jsonable_encoder(result)}
         except Exception as error:
             return {"resultado": str(error)}
 

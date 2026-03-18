@@ -141,5 +141,158 @@ class DashboardController:
         except Exception as error:
             return {"resultado": str(error)}
 
+    # ── Endpoints del Odontólogo ──
+
+    def obtener_metricas_doctor(self, usuario_id: int):
+        """Métricas personales del odontólogo."""
+        try:
+            conn = get_db_connection()
+            cursor = conn.cursor(dictionary=True)
+
+            # Citas de hoy del doctor
+            cursor.execute(
+                "SELECT COUNT(*) as total FROM citas "
+                "WHERE usuario_id = %s AND fecha = CURDATE()",
+                (usuario_id,),
+            )
+            citas_hoy = cursor.fetchone()["total"]
+
+            # Pacientes atendidos (distintos)
+            cursor.execute(
+                "SELECT COUNT(DISTINCT paciente_id) as total FROM citas "
+                "WHERE usuario_id = %s",
+                (usuario_id,),
+            )
+            total_pacientes = cursor.fetchone()["total"]
+
+            # Tratamientos activos del doctor
+            cursor.execute(
+                "SELECT COUNT(*) as total FROM historia_tratamientos ht "
+                "JOIN historias_clinicas hc ON ht.historia_clinica_id = hc.id "
+                "WHERE hc.usuario_id = %s AND ht.estado IN ('Planificado', 'En_Progreso')",
+                (usuario_id,),
+            )
+            tratamientos_activos = cursor.fetchone()["total"]
+
+            # Citas programadas próximas (próximos 7 días)
+            cursor.execute(
+                "SELECT COUNT(*) as total FROM citas "
+                "WHERE usuario_id = %s AND fecha BETWEEN CURDATE() AND DATE_ADD(CURDATE(), INTERVAL 7 DAY) "
+                "AND estado IN ('Programada', 'Confirmada')",
+                (usuario_id,),
+            )
+            citas_proximas = cursor.fetchone()["total"]
+
+            # Historias clínicas del doctor
+            cursor.execute(
+                "SELECT COUNT(*) as total FROM historias_clinicas "
+                "WHERE usuario_id = %s",
+                (usuario_id,),
+            )
+            total_historias = cursor.fetchone()["total"]
+
+            # Citas completadas este mes
+            cursor.execute(
+                "SELECT COUNT(*) as total FROM citas "
+                "WHERE usuario_id = %s AND estado = 'Completada' "
+                "AND MONTH(fecha) = MONTH(CURDATE()) AND YEAR(fecha) = YEAR(CURDATE())",
+                (usuario_id,),
+            )
+            completadas_mes = cursor.fetchone()["total"]
+
+            conn.close()
+            return {
+                "resultado": {
+                    "citas_hoy": citas_hoy,
+                    "total_pacientes": total_pacientes,
+                    "tratamientos_activos": tratamientos_activos,
+                    "citas_proximas": citas_proximas,
+                    "total_historias": total_historias,
+                    "completadas_mes": completadas_mes,
+                }
+            }
+        except Exception as error:
+            return {"resultado": str(error)}
+
+    def obtener_citas_hoy_doctor(self, usuario_id: int):
+        """Citas del día del odontólogo."""
+        try:
+            conn = get_db_connection()
+            cursor = conn.cursor(dictionary=True)
+            cursor.execute(
+                "SELECT c.*, p.nombre as paciente_nombre, p.apellido as paciente_apellido, "
+                "e.nombre as especialidad_nombre "
+                "FROM citas c "
+                "JOIN pacientes p ON c.paciente_id = p.id "
+                "JOIN especialidades e ON c.especialidad_id = e.id "
+                "WHERE c.usuario_id = %s AND c.fecha = CURDATE() ORDER BY c.hora",
+                (usuario_id,),
+            )
+            result = cursor.fetchall()
+            conn.close()
+            return {"resultado": jsonable_encoder(result)}
+        except Exception as error:
+            return {"resultado": str(error)}
+
+    def obtener_pacientes_doctor(self, usuario_id: int):
+        """Pacientes atendidos por el odontólogo (distintos de sus citas)."""
+        try:
+            conn = get_db_connection()
+            cursor = conn.cursor(dictionary=True)
+            cursor.execute(
+                "SELECT DISTINCT p.* FROM pacientes p "
+                "JOIN citas c ON p.id = c.paciente_id "
+                "WHERE c.usuario_id = %s AND p.activo = 1 "
+                "ORDER BY p.nombre, p.apellido",
+                (usuario_id,),
+            )
+            result = cursor.fetchall()
+            conn.close()
+            return {"resultado": jsonable_encoder(result)}
+        except Exception as error:
+            return {"resultado": str(error)}
+
+    def obtener_historias_doctor(self, usuario_id: int):
+        """Historias clínicas creadas por el odontólogo."""
+        try:
+            conn = get_db_connection()
+            cursor = conn.cursor(dictionary=True)
+            cursor.execute(
+                "SELECT hc.*, p.nombre as paciente_nombre, p.apellido as paciente_apellido "
+                "FROM historias_clinicas hc "
+                "JOIN pacientes p ON hc.paciente_id = p.id "
+                "WHERE hc.usuario_id = %s ORDER BY hc.fecha_atencion DESC",
+                (usuario_id,),
+            )
+            result = cursor.fetchall()
+            conn.close()
+            return {"resultado": jsonable_encoder(result)}
+        except Exception as error:
+            return {"resultado": str(error)}
+
+    def obtener_tratamientos_doctor(self, usuario_id: int):
+        """Tratamientos en curso gestionados por el odontólogo."""
+        try:
+            conn = get_db_connection()
+            cursor = conn.cursor(dictionary=True)
+            cursor.execute(
+                "SELECT ht.*, t.nombre as tratamiento_nombre, t.descripcion as tratamiento_descripcion, "
+                "p.nombre as paciente_nombre, p.apellido as paciente_apellido, "
+                "e.nombre as especialidad_nombre "
+                "FROM historia_tratamientos ht "
+                "JOIN historias_clinicas hc ON ht.historia_clinica_id = hc.id "
+                "JOIN tratamientos t ON ht.tratamiento_id = t.id "
+                "JOIN especialidades e ON t.especialidad_id = e.id "
+                "JOIN pacientes p ON hc.paciente_id = p.id "
+                "WHERE hc.usuario_id = %s "
+                "ORDER BY ht.fecha_inicio DESC",
+                (usuario_id,),
+            )
+            result = cursor.fetchall()
+            conn.close()
+            return {"resultado": jsonable_encoder(result)}
+        except Exception as error:
+            return {"resultado": str(error)}
+
 
 Dashboard_Controller = DashboardController()

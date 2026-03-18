@@ -1,6 +1,6 @@
-﻿import { useEffect, useState, useCallback } from "react";
+﻿import { useEffect, useState, useCallback, useMemo } from "react";
 import { Page } from "components/shared/Page";
-import { Button, Card, Input } from "components/ui";
+import { Button, Card, Input, Table, THead, TBody, Tr, Th, Td } from "components/ui";
 import {
   PlusIcon,
   PencilSquareIcon,
@@ -8,10 +8,19 @@ import {
   MagnifyingGlassIcon,
   XMarkIcon,
   BeakerIcon,
-  CurrencyDollarIcon,
 } from "@heroicons/react/24/outline";
 import axios from "utils/axios";
 import { toast } from "sonner";
+import {
+  useReactTable,
+  getCoreRowModel,
+  getFilteredRowModel,
+  getPaginationRowModel,
+  getSortedRowModel,
+  flexRender,
+} from "@tanstack/react-table";
+import { PaginationSection } from "components/shared/table/PaginationSection";
+import { TableSortIcon } from "components/shared/table/TableSortIcon";
 
 const emptyForm = {
   nombre: "",
@@ -46,12 +55,6 @@ export default function Tratamientos() {
   useEffect(() => {
     fetchAll();
   }, [fetchAll]);
-
-  const filtered = tratamientos.filter(
-    (t) =>
-      t.nombre?.toLowerCase().includes(search.toLowerCase()) ||
-      t.especialidad_nombre?.toLowerCase().includes(search.toLowerCase())
-  );
 
   const handleSubmit = async (e) => {
     e.preventDefault();
@@ -105,6 +108,73 @@ export default function Tratamientos() {
     }
   };
 
+  // --- TanStack Table ---
+  const [sorting, setSorting] = useState([]);
+
+  const columns = useMemo(() => [
+    {
+      accessorKey: "nombre",
+      header: "Nombre",
+      cell: ({ getValue }) => <span className="font-medium text-gray-800 dark:text-dark-50">{getValue()}</span>,
+    },
+    {
+      accessorKey: "especialidad_nombre",
+      header: "Especialidad",
+      cell: ({ getValue }) => getValue() || "Sin especialidad",
+    },
+    {
+      accessorKey: "precio",
+      header: "Precio",
+      cell: ({ getValue }) => `$${Number(getValue() || 0).toLocaleString()}`,
+    },
+    {
+      accessorKey: "duracion_sesiones",
+      header: "Sesiones",
+    },
+    {
+      accessorKey: "activo",
+      header: "Estado",
+      cell: ({ getValue }) => {
+        const activo = getValue();
+        return (
+          <span className={`rounded-full px-2 py-0.5 text-xs font-medium ${activo ? "bg-emerald-100 text-emerald-700 dark:bg-emerald-500/15 dark:text-emerald-400" : "bg-gray-100 text-gray-500 dark:bg-dark-600 dark:text-dark-300"}`}>
+            {activo ? "Activo" : "Inactivo"}
+          </span>
+        );
+      },
+    },
+    {
+      id: "acciones",
+      header: "Acciones",
+      enableSorting: false,
+      cell: ({ row }) => {
+        const t = row.original;
+        return (
+          <div className="flex items-center gap-1">
+            <button onClick={() => handleEdit(t)} className="rounded-lg p-1.5 text-gray-400 transition-colors hover:bg-gray-100 hover:text-amber-600 dark:hover:bg-dark-600 dark:hover:text-amber-400">
+              <PencilSquareIcon className="size-4" />
+            </button>
+            <button onClick={() => handleDelete(t.id)} className="rounded-lg p-1.5 text-gray-400 transition-colors hover:bg-red-50 hover:text-red-500 dark:hover:bg-red-500/10 dark:hover:text-red-400">
+              <TrashIcon className="size-4" />
+            </button>
+          </div>
+        );
+      },
+    },
+  ], []);
+
+  const table = useReactTable({
+    data: tratamientos,
+    columns,
+    state: { globalFilter: search, sorting },
+    onGlobalFilterChange: setSearch,
+    onSortingChange: setSorting,
+    getCoreRowModel: getCoreRowModel(),
+    getFilteredRowModel: getFilteredRowModel(),
+    getSortedRowModel: getSortedRowModel(),
+    getPaginationRowModel: getPaginationRowModel(),
+  });
+
   return (
     <Page title="Tratamientos">
       <div className="transition-content w-full px-(--margin-x) pb-8 pt-5 lg:pt-6">
@@ -139,53 +209,50 @@ export default function Tratamientos() {
           </div>
         </div>
 
-        {/* Cards Grid */}
-        <div className="mt-5">
-          {filtered.length === 0 ? (
-            <Card className="rounded-xl p-10">
-              <div className="flex flex-col items-center text-center">
-                <BeakerIcon className="size-14 text-gray-200 dark:text-dark-500" />
-                <p className="mt-4 text-sm font-medium text-gray-400 dark:text-dark-300">No hay tratamientos</p>
-              </div>
-            </Card>
-          ) : (
-            <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-3">
-              {filtered.map((t) => (
-                <Card key={t.id} className="group relative overflow-hidden rounded-xl p-4 transition-all hover:shadow-lg">
-                  <div className="absolute inset-0 bg-gradient-to-br from-amber-500 to-orange-600 opacity-0 transition-opacity group-hover:opacity-[0.02]" />
-                  <div className="relative">
-                    <div className="flex items-start justify-between">
-                      <div>
-                        <p className="text-sm font-semibold text-gray-800 dark:text-dark-50">{t.nombre}</p>
-                        <p className="mt-0.5 text-xs text-gray-400 dark:text-dark-300">{t.especialidad_nombre || "Sin especialidad"}</p>
-                      </div>
-                      <div className="flex gap-1">
-                        <button onClick={() => handleEdit(t)} className="rounded-lg p-1.5 text-gray-400 transition-colors hover:bg-gray-100 hover:text-amber-600 dark:hover:bg-dark-600 dark:hover:text-amber-400">
-                          <PencilSquareIcon className="size-4" />
-                        </button>
-                        <button onClick={() => handleDelete(t.id)} className="rounded-lg p-1.5 text-gray-400 transition-colors hover:bg-red-50 hover:text-red-500 dark:hover:bg-red-500/10 dark:hover:text-red-400">
-                          <TrashIcon className="size-4" />
-                        </button>
-                      </div>
-                    </div>
-                    {t.descripcion && <p className="mt-2 text-xs text-gray-500 dark:text-dark-300 line-clamp-2">{t.descripcion}</p>}
-                    <div className="mt-3 flex items-center gap-3">
-                      <div className="flex items-center gap-1">
-                        <CurrencyDollarIcon className="size-4 text-amber-500" />
-                        <span className="text-sm font-bold text-gray-800 dark:text-dark-50">{Number(t.precio).toLocaleString()}</span>
-                      </div>
-                      <span className="text-xs text-gray-400">&middot;</span>
-                      <span className="text-xs text-gray-500 dark:text-dark-300">{t.duracion_sesiones} sesion(es)</span>
-                      <span className={`ml-auto rounded-full px-2 py-0.5 text-xs font-medium ${t.activo ? "bg-emerald-100 text-emerald-700 dark:bg-emerald-500/15 dark:text-emerald-400" : "bg-gray-100 text-gray-500 dark:bg-dark-600 dark:text-dark-300"}`}>
-                        {t.activo ? "Activo" : "Inactivo"}
-                      </span>
-                    </div>
-                  </div>
-                </Card>
-              ))}
-            </div>
-          )}
-        </div>
+        {/* Table */}
+        <Card className="mt-5 rounded-xl">
+          <div className="scrollbar-sm min-w-full overflow-x-auto">
+            <Table hoverable className="w-full text-left">
+              <THead>
+                {table.getHeaderGroups().map((hg) => (
+                  <Tr key={hg.id}>
+                    {hg.headers.map((header) => (
+                      <Th key={header.id} className="cursor-pointer select-none whitespace-nowrap px-4 py-3" onClick={header.column.getToggleSortingHandler()}>
+                        <div className="flex items-center gap-2 text-xs font-semibold uppercase tracking-wider">
+                          {flexRender(header.column.columnDef.header, header.getContext())}
+                          {header.column.getCanSort() && <TableSortIcon sorted={header.column.getIsSorted()} />}
+                        </div>
+                      </Th>
+                    ))}
+                  </Tr>
+                ))}
+              </THead>
+              <TBody>
+                {table.getRowModel().rows.length === 0 ? (
+                  <Tr>
+                    <Td colSpan={columns.length} className="py-10 text-center">
+                      <BeakerIcon className="mx-auto size-10 text-gray-200 dark:text-dark-500" />
+                      <p className="mt-2 text-sm text-gray-400 dark:text-dark-300">No hay tratamientos</p>
+                    </Td>
+                  </Tr>
+                ) : (
+                  table.getRowModel().rows.map((row) => (
+                    <Tr key={row.id}>
+                      {row.getVisibleCells().map((cell) => (
+                        <Td key={cell.id} className="whitespace-nowrap px-4 py-3 text-sm">
+                          {flexRender(cell.column.columnDef.cell, cell.getContext())}
+                        </Td>
+                      ))}
+                    </Tr>
+                  ))
+                )}
+              </TBody>
+            </Table>
+          </div>
+          <div className="border-t border-gray-200 px-4 py-4 dark:border-dark-500">
+            <PaginationSection table={table} />
+          </div>
+        </Card>
 
         {/* Modal */}
         {showModal && (

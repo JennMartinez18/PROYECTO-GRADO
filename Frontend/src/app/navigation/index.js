@@ -2,6 +2,7 @@ import { dashboards } from "./dashboards";
 import { clinica } from "./clinica";
 import { administracion } from "./administracion";
 import { portal } from "./portal";
+import { odontologo } from "./odontologo";
 import { ROLES } from "configs/roles.config";
 
 // Navegación completa (legacy export)
@@ -31,7 +32,7 @@ export const getNavigationByRole = (rolId) => {
         case ROLES.RECEPCIONISTA:
             return [dashboards, clinicaRecepcion, adminRecepcion];
         case ROLES.ODONTOLOGO:
-            return [dashboards, clinica];
+            return [odontologo];
         case ROLES.PACIENTE:
             return [portal];
         default:

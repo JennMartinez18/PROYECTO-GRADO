@@ -25,8 +25,7 @@ export const ROLE_ACCESS = {
     "/settings",
   ],
   [ROLES.ODONTOLOGO]: [
-    "/dashboards",
-    "/clinica",
+    "/odontologo",
     "/settings",
   ],
 };
@@ -36,7 +35,7 @@ export const ROLE_HOME = {
   [ROLES.ADMIN]: "/dashboards/home",
   [ROLES.PACIENTE]: "/portal",
   [ROLES.RECEPCIONISTA]: "/dashboards/home",
-  [ROLES.ODONTOLOGO]: "/dashboards/home",
+  [ROLES.ODONTOLOGO]: "/odontologo",
 };
 
 // Verificar si un rol tiene acceso a una ruta

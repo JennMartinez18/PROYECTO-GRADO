@@ -102,6 +102,12 @@ const protectedRoutes = {
                 Component: (await import("app/pages/admin/roles")).default,
               }),
             },
+            {
+              path: "reportes",
+              lazy: async () => ({
+                Component: (await import("app/pages/admin/reportes")).default,
+              }),
+            },
           ],
         },
         // Portal del Paciente
@@ -142,6 +148,42 @@ const protectedRoutes = {
               path: "mi-perfil",
               lazy: async () => ({
                 Component: (await import("app/pages/portal/mi-perfil")).default,
+              }),
+            },
+          ],
+        },
+        // Portal del Odontólogo
+        {
+          path: "odontologo",
+          children: [
+            {
+              index: true,
+              lazy: async () => ({
+                Component: (await import("app/pages/odontologo/inicio")).default,
+              }),
+            },
+            {
+              path: "mis-citas",
+              lazy: async () => ({
+                Component: (await import("app/pages/odontologo/mis-citas")).default,
+              }),
+            },
+            {
+              path: "mis-pacientes",
+              lazy: async () => ({
+                Component: (await import("app/pages/odontologo/mis-pacientes")).default,
+              }),
+            },
+            {
+              path: "historias",
+              lazy: async () => ({
+                Component: (await import("app/pages/odontologo/historias")).default,
+              }),
+            },
+            {
+              path: "tratamientos",
+              lazy: async () => ({
+                Component: (await import("app/pages/odontologo/tratamientos")).default,
               }),
             },
           ],

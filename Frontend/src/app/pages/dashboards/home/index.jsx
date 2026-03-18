@@ -9,7 +9,6 @@ import {
   ArrowTrendingUpIcon,
   ClockIcon,
   CheckCircleIcon,
-  ChartBarIcon,
 } from "@heroicons/react/24/outline";
 import axios from "utils/axios";
 import { useAuthContext } from "app/contexts/auth/context";
@@ -19,17 +18,6 @@ export default function Home() {
   const { user } = useAuthContext();
   const [metrics, setMetrics] = useState(null);
   const [citasHoy, setCitasHoy] = useState([]);
-  // Reportes
-  const [repIngresos, setRepIngresos] = useState(null);
-  const [repMes, setRepMes] = useState(new Date().getMonth() + 1);
-  const [repAnio, setRepAnio] = useState(new Date().getFullYear());
-  const [repAsistencia, setRepAsistencia] = useState(null);
-  const hoy = new Date();
-  const hace30 = new Date(hoy);
-  hace30.setDate(hace30.getDate() - 30);
-  const fmt = (d) => d.toISOString().split("T")[0];
-  const [asistInicio, setAsistInicio] = useState(fmt(hace30));
-  const [asistFin, setAsistFin] = useState(fmt(hoy));
 
   useEffect(() => {
     const fetchData = async () => {
@@ -46,22 +34,6 @@ export default function Home() {
     };
     fetchData();
   }, []);
-
-  // Fetch reporte ingresos
-  useEffect(() => {
-    axios.get(`/dashboard/reporte-ingresos?mes=${repMes}&anio=${repAnio}`)
-      .then((r) => { if (r.data.resultado && typeof r.data.resultado === "object") setRepIngresos(r.data.resultado); })
-      .catch(() => {});
-  }, [repMes, repAnio]);
-
-  // Fetch reporte asistencia
-  useEffect(() => {
-    if (asistInicio && asistFin) {
-      axios.get(`/dashboard/reporte-asistencia?fecha_inicio=${asistInicio}&fecha_fin=${asistFin}`)
-        .then((r) => { if (r.data.resultado && typeof r.data.resultado === "object") setRepAsistencia(r.data.resultado); })
-        .catch(() => {});
-    }
-  }, [asistInicio, asistFin]);
 
   const statCards = [
     { title: "Pacientes", value: metrics?.total_pacientes ?? "—", Icon: UserGroupIcon, gradient: "from-indigo-500 to-blue-600" },
@@ -161,91 +133,6 @@ export default function Home() {
           </Card>
         </div>
 
-        {/* Reportes */}
-        <div className="mt-6 grid grid-cols-1 gap-5 lg:grid-cols-2">
-          {/* Reporte de Ingresos */}
-          <Card className="rounded-xl p-5">
-            <div className="flex items-center gap-3">
-              <div className="flex size-9 items-center justify-center rounded-lg bg-gradient-to-br from-amber-500 to-orange-600 text-white shadow-sm">
-                <BanknotesIcon className="size-5" />
-              </div>
-              <h3 className="text-base font-semibold text-gray-800 dark:text-dark-50">Reporte de Ingresos</h3>
-            </div>
-            <div className="mt-4 flex items-center gap-3">
-              <select value={repMes} onChange={(e) => setRepMes(Number(e.target.value))} className="rounded-lg border border-gray-200 bg-white px-3 py-1.5 text-sm dark:border-dark-500 dark:bg-dark-700 dark:text-dark-100">
-                {[...Array(12)].map((_, i) => (
-                  <option key={i} value={i + 1}>{new Date(2000, i).toLocaleString("es-ES", { month: "long" })}</option>
-                ))}
-              </select>
-              <select value={repAnio} onChange={(e) => setRepAnio(Number(e.target.value))} className="rounded-lg border border-gray-200 bg-white px-3 py-1.5 text-sm dark:border-dark-500 dark:bg-dark-700 dark:text-dark-100">
-                {[2023, 2024, 2025, 2026].map((y) => (
-                  <option key={y} value={y}>{y}</option>
-                ))}
-              </select>
-            </div>
-            {repIngresos ? (
-              <>
-                <div className="mt-4 flex items-baseline gap-2">
-                  <span className="text-2xl font-bold text-emerald-600 dark:text-emerald-400">${Number(repIngresos.total_ingresos).toLocaleString()}</span>
-                  <span className="text-xs text-gray-400">total del mes</span>
-                </div>
-                <div className="mt-3 max-h-48 space-y-1.5 overflow-auto">
-                  {(repIngresos.facturas || []).map((f, i) => (
-                    <div key={i} className="flex items-center justify-between rounded-lg border border-gray-100 px-3 py-2 text-sm dark:border-dark-500">
-                      <span className="text-gray-700 dark:text-dark-100">{f.paciente_nombre} {f.paciente_apellido}</span>
-                      <span className="font-semibold text-gray-800 dark:text-dark-50">${Number(f.total).toLocaleString()}</span>
-                    </div>
-                  ))}
-                  {(repIngresos.facturas || []).length === 0 && (
-                    <p className="py-4 text-center text-sm text-gray-400">Sin ingresos en este período</p>
-                  )}
-                </div>
-              </>
-            ) : (
-              <p className="mt-4 text-sm text-gray-400">Cargando...</p>
-            )}
-          </Card>
-
-          {/* Reporte de Asistencia */}
-          <Card className="rounded-xl p-5">
-            <div className="flex items-center gap-3">
-              <div className="flex size-9 items-center justify-center rounded-lg bg-gradient-to-br from-violet-500 to-purple-600 text-white shadow-sm">
-                <ChartBarIcon className="size-5" />
-              </div>
-              <h3 className="text-base font-semibold text-gray-800 dark:text-dark-50">Reporte de Asistencia</h3>
-            </div>
-            <div className="mt-4 flex items-center gap-3">
-              <input type="date" value={asistInicio} onChange={(e) => setAsistInicio(e.target.value)} className="rounded-lg border border-gray-200 bg-white px-3 py-1.5 text-sm dark:border-dark-500 dark:bg-dark-700 dark:text-dark-100" />
-              <span className="text-xs text-gray-400">a</span>
-              <input type="date" value={asistFin} onChange={(e) => setAsistFin(e.target.value)} className="rounded-lg border border-gray-200 bg-white px-3 py-1.5 text-sm dark:border-dark-500 dark:bg-dark-700 dark:text-dark-100" />
-            </div>
-            {repAsistencia ? (
-              <div className="mt-4 space-y-2">
-                {(repAsistencia.detalle || []).length === 0 && (
-                  <p className="py-4 text-center text-sm text-gray-400">Sin datos en este rango</p>
-                )}
-                {(repAsistencia.detalle || []).map((d, i) => {
-                  const total = repAsistencia.detalle.reduce((s, x) => s + x.total, 0);
-                  const pct = total > 0 ? Math.round((d.total / total) * 100) : 0;
-                  const color = d.estado === "Completada" ? "bg-emerald-500" : d.estado === "Cancelada" || d.estado === "No_Asistio" ? "bg-red-500" : d.estado === "En_Curso" ? "bg-blue-500" : "bg-amber-500";
-                  return (
-                    <div key={i}>
-                      <div className="flex items-center justify-between text-sm">
-                        <span className="text-gray-700 dark:text-dark-100">{d.estado?.replace("_", " ")}</span>
-                        <span className="font-semibold text-gray-800 dark:text-dark-50">{d.total} ({pct}%)</span>
-                      </div>
-                      <div className="mt-1 h-2 overflow-hidden rounded-full bg-gray-100 dark:bg-dark-500">
-                        <div className={`h-full rounded-full ${color}`} style={{ width: `${pct}%` }} />
-                      </div>
-                    </div>
-                  );
-                })}
-              </div>
-            ) : (
-              <p className="mt-4 text-sm text-gray-400">Cargando...</p>
-            )}
-          </Card>
-        </div>
       </div>
     </Page>
   );

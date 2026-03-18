@@ -1,16 +1,25 @@
-﻿import { useEffect, useState, useCallback } from "react";
+﻿import { useEffect, useState, useCallback, useMemo } from "react";
 import { Page } from "components/shared/Page";
-import { Button, Card, Input } from "components/ui";
+import { Button, Card, Input, Table, THead, TBody, Tr, Th, Td } from "components/ui";
 import {
   PlusIcon,
   PencilSquareIcon,
   MagnifyingGlassIcon,
   XMarkIcon,
   BanknotesIcon,
-  CurrencyDollarIcon,
 } from "@heroicons/react/24/outline";
 import axios from "utils/axios";
 import { toast } from "sonner";
+import {
+  useReactTable,
+  getCoreRowModel,
+  getFilteredRowModel,
+  getPaginationRowModel,
+  getSortedRowModel,
+  flexRender,
+} from "@tanstack/react-table";
+import { PaginationSection } from "components/shared/table/PaginationSection";
+import { TableSortIcon } from "components/shared/table/TableSortIcon";
 
 const emptyForm = {
   paciente_id: "",
@@ -26,7 +35,8 @@ const emptyForm = {
 export default function Facturas() {
   const [facturas, setFacturas] = useState([]);
   const [pacientes, setPacientes] = useState([]);
-  const [usuarios, setUsuarios] = useState([]);
+  const [doctores, setDoctores] = useState([]);
+  const [citasDoctor, setCitasDoctor] = useState([]);
   const [search, setSearch] = useState("");
   const [filtroEstado, setFiltroEstado] = useState("Todas");
   const [showModal, setShowModal] = useState(false);
@@ -35,14 +45,14 @@ export default function Facturas() {
 
   const fetchAll = useCallback(async () => {
     try {
-      const [fR, pR, uR] = await Promise.all([
+      const [fR, pR, dR] = await Promise.all([
         axios.get("/facturas"),
         axios.get("/pacientes"),
-        axios.get("/usuarios"),
+        axios.get("/usuarios/doctores"),
       ]);
       if (Array.isArray(fR.data.resultado)) setFacturas(fR.data.resultado);
       if (Array.isArray(pR.data.resultado)) setPacientes(pR.data.resultado);
-      if (Array.isArray(uR.data.resultado)) setUsuarios(uR.data.resultado);
+      if (Array.isArray(dR.data.resultado)) setDoctores(dR.data.resultado);
     } catch {
       // error silencioso
     }
@@ -52,13 +62,22 @@ export default function Facturas() {
     fetchAll();
   }, [fetchAll]);
 
-  const filtered = facturas.filter((f) => {
-    const matchSearch =
-      f.numero_factura?.toLowerCase().includes(search.toLowerCase()) ||
-      f.paciente_nombre?.toLowerCase().includes(search.toLowerCase());
-    const matchEstado = filtroEstado === "Todas" || f.estado === filtroEstado;
-    return matchSearch && matchEstado;
-  });
+  // Cargar citas del doctor seleccionado (solo Completadas)
+  useEffect(() => {
+    if (form.usuario_id) {
+      axios.get(`/citas/doctor/${form.usuario_id}`)
+        .then((r) => {
+          if (Array.isArray(r.data.resultado)) {
+            setCitasDoctor(r.data.resultado.filter((c) => c.estado === "Completada"));
+          } else {
+            setCitasDoctor([]);
+          }
+        })
+        .catch(() => setCitasDoctor([]));
+    } else {
+      setCitasDoctor([]);
+    }
+  }, [form.usuario_id]);
 
   const totalPendiente = facturas.filter(f => f.estado === "Pendiente").reduce((sum, f) => sum + Number(f.total || 0), 0);
 
@@ -124,6 +143,84 @@ export default function Facturas() {
 
   const tabs = ["Todas", "Pendiente", "Pagada", "Anulada"];
 
+  // --- TanStack Table ---
+  const [sorting, setSorting] = useState([]);
+
+  const estadoFiltered = useMemo(
+    () => facturas.filter((f) => filtroEstado === "Todas" || f.estado === filtroEstado),
+    [facturas, filtroEstado]
+  );
+
+  const columns = useMemo(() => [
+    {
+      accessorKey: "numero_factura",
+      header: "N° Factura",
+    },
+    {
+      id: "paciente",
+      header: "Paciente",
+      accessorFn: (row) => `${row.paciente_nombre || ""} ${row.paciente_apellido || ""}`,
+    },
+    {
+      accessorKey: "fecha_emision",
+      header: "Fecha Emisión",
+      cell: ({ getValue }) => getValue()?.split("T")[0] || "",
+    },
+    {
+      accessorKey: "total",
+      header: "Total",
+      cell: ({ getValue }) => `$${Number(getValue() || 0).toLocaleString()}`,
+    },
+    {
+      accessorKey: "metodo_pago",
+      header: "Método Pago",
+      cell: ({ getValue }) => getValue() || "—",
+    },
+    {
+      accessorKey: "estado",
+      header: "Estado",
+      cell: ({ getValue }) => {
+        const estado = getValue();
+        return (
+          <span className={`rounded-full px-2.5 py-1 text-xs font-semibold ${estadoColor(estado)}`}>{estado}</span>
+        );
+      },
+    },
+    {
+      id: "acciones",
+      header: "Acciones",
+      enableSorting: false,
+      cell: ({ row }) => {
+        const f = row.original;
+        return (
+          <div className="flex items-center gap-1">
+            {f.estado === "Pendiente" && (
+              <>
+                <button onClick={() => handleChangeEstado(f.id, "Pagada")} className="rounded-lg px-2 py-1 text-xs font-medium text-emerald-600 transition-colors hover:bg-emerald-50 dark:text-emerald-400 dark:hover:bg-emerald-500/10">Pagar</button>
+                <button onClick={() => handleChangeEstado(f.id, "Anulada")} className="rounded-lg px-2 py-1 text-xs font-medium text-red-500 transition-colors hover:bg-red-50 dark:text-red-400 dark:hover:bg-red-500/10">Anular</button>
+              </>
+            )}
+            <button onClick={() => handleEdit(f)} className="rounded-lg p-1.5 text-gray-400 transition-colors hover:bg-gray-100 hover:text-gray-600 dark:hover:bg-dark-600">
+              <PencilSquareIcon className="size-4" />
+            </button>
+          </div>
+        );
+      },
+    },
+  ], [handleChangeEstado]);
+
+  const table = useReactTable({
+    data: estadoFiltered,
+    columns,
+    state: { globalFilter: search, sorting },
+    onGlobalFilterChange: setSearch,
+    onSortingChange: setSorting,
+    getCoreRowModel: getCoreRowModel(),
+    getFilteredRowModel: getFilteredRowModel(),
+    getSortedRowModel: getSortedRowModel(),
+    getPaginationRowModel: getPaginationRowModel(),
+  });
+
   return (
     <Page title="Facturas">
       <div className="transition-content w-full px-(--margin-x) pb-8 pt-5 lg:pt-6">
@@ -169,46 +266,50 @@ export default function Facturas() {
           </div>
         </div>
 
-        {/* Facturas List */}
-        <div className="mt-4 space-y-2">
-          {filtered.length === 0 ? (
-            <Card className="rounded-xl p-10">
-              <div className="flex flex-col items-center text-center">
-                <BanknotesIcon className="size-14 text-gray-200 dark:text-dark-500" />
-                <p className="mt-4 text-sm font-medium text-gray-400 dark:text-dark-300">No hay facturas</p>
-              </div>
-            </Card>
-          ) : (
-            filtered.map((f) => (
-              <Card key={f.id} className="group rounded-xl p-4 transition-all hover:shadow-md">
-                <div className="flex items-center gap-4">
-                  <div className="hidden flex-col items-center rounded-xl bg-rose-50 px-3 py-2 sm:flex dark:bg-rose-500/10">
-                    <CurrencyDollarIcon className="size-5 text-rose-500 dark:text-rose-400" />
-                    <span className="text-sm font-bold text-rose-700 dark:text-rose-300">{Number(f.total).toLocaleString()}</span>
-                  </div>
-                  <div className="min-w-0 flex-1">
-                    <div className="flex items-center gap-2">
-                      <p className="text-sm font-semibold text-gray-800 dark:text-dark-50">{f.numero_factura}</p>
-                      <span className={`rounded-full px-2 py-0.5 text-xs font-semibold ${estadoColor(f.estado)}`}>{f.estado}</span>
-                    </div>
-                    <p className="text-xs text-gray-400 dark:text-dark-300">{f.paciente_nombre} {f.paciente_apellido}  {f.fecha_emision?.split("T")[0]} {f.metodo_pago ? ("  " + f.metodo_pago) : ""}</p>
-                  </div>
-                  <div className="flex items-center gap-1">
-                    {f.estado === "Pendiente" && (
-                      <>
-                        <button onClick={() => handleChangeEstado(f.id, "Pagada")} className="rounded-lg px-2 py-1 text-xs font-medium text-emerald-600 transition-colors hover:bg-emerald-50 dark:text-emerald-400 dark:hover:bg-emerald-500/10">Pagar</button>
-                        <button onClick={() => handleChangeEstado(f.id, "Anulada")} className="rounded-lg px-2 py-1 text-xs font-medium text-red-500 transition-colors hover:bg-red-50 dark:text-red-400 dark:hover:bg-red-500/10">Anular</button>
-                      </>
-                    )}
-                    <button onClick={() => handleEdit(f)} className="rounded-lg p-1.5 text-gray-400 transition-colors hover:bg-gray-100 hover:text-gray-600 dark:hover:bg-dark-600">
-                      <PencilSquareIcon className="size-4" />
-                    </button>
-                  </div>
-                </div>
-              </Card>
-            ))
-          )}
-        </div>
+        {/* Facturas Table */}
+        <Card className="mt-4 rounded-xl">
+          <div className="scrollbar-sm min-w-full overflow-x-auto">
+            <Table hoverable className="w-full text-left">
+              <THead>
+                {table.getHeaderGroups().map((hg) => (
+                  <Tr key={hg.id}>
+                    {hg.headers.map((header) => (
+                      <Th key={header.id} className="cursor-pointer select-none whitespace-nowrap px-4 py-3" onClick={header.column.getToggleSortingHandler()}>
+                        <div className="flex items-center gap-2 text-xs font-semibold uppercase tracking-wider">
+                          {flexRender(header.column.columnDef.header, header.getContext())}
+                          {header.column.getCanSort() && <TableSortIcon sorted={header.column.getIsSorted()} />}
+                        </div>
+                      </Th>
+                    ))}
+                  </Tr>
+                ))}
+              </THead>
+              <TBody>
+                {table.getRowModel().rows.length === 0 ? (
+                  <Tr>
+                    <Td colSpan={columns.length} className="py-10 text-center">
+                      <BanknotesIcon className="mx-auto size-10 text-gray-200 dark:text-dark-500" />
+                      <p className="mt-2 text-sm text-gray-400 dark:text-dark-300">No hay facturas</p>
+                    </Td>
+                  </Tr>
+                ) : (
+                  table.getRowModel().rows.map((row) => (
+                    <Tr key={row.id}>
+                      {row.getVisibleCells().map((cell) => (
+                        <Td key={cell.id} className="whitespace-nowrap px-4 py-3 text-sm">
+                          {flexRender(cell.column.columnDef.cell, cell.getContext())}
+                        </Td>
+                      ))}
+                    </Tr>
+                  ))
+                )}
+              </TBody>
+            </Table>
+          </div>
+          <div className="border-t border-gray-200 px-4 py-4 dark:border-dark-500">
+            <PaginationSection table={table} />
+          </div>
+        </Card>
 
         {/* Modal */}
         {showModal && (
@@ -228,26 +329,67 @@ export default function Facturas() {
                 </button>
               </div>
               <form onSubmit={handleSubmit} className="mt-5 space-y-4">
+                {/* Doctor */}
                 <div>
-                  <label className="mb-1 block text-xs-plus font-medium text-gray-700 dark:text-dark-100">Paciente</label>
-                  <select className="form-select w-full rounded-lg border border-gray-300 bg-white px-3 py-2 text-sm dark:border-dark-500 dark:bg-dark-700 dark:text-dark-100" value={form.paciente_id} onChange={(e) => setForm({ ...form, paciente_id: e.target.value })}>
-                    <option value="">Seleccionar paciente</option>
-                    {pacientes.map((p) => (<option key={p.id} value={p.id}>{p.nombre} {p.apellido}</option>))}
+                  <label className="mb-1 block text-xs-plus font-medium text-gray-700 dark:text-dark-100">Odontólogo *</label>
+                  <select
+                    required
+                    className="form-select w-full rounded-lg border border-gray-300 bg-white px-3 py-2 text-sm dark:border-dark-500 dark:bg-dark-700 dark:text-dark-100"
+                    value={form.usuario_id}
+                    onChange={(e) => setForm({ ...form, usuario_id: e.target.value, cita_id: "", paciente_id: "" })}
+                  >
+                    <option value="">Seleccionar odontólogo</option>
+                    {doctores.map((d) => (
+                      <option key={d.id} value={d.id}>{d.nombre} {d.apellido}</option>
+                    ))}
                   </select>
                 </div>
+                {/* Cita */}
                 <div>
-                  <label className="mb-1 block text-xs-plus font-medium text-gray-700 dark:text-dark-100">Atendido por</label>
-                  <select className="form-select w-full rounded-lg border border-gray-300 bg-white px-3 py-2 text-sm dark:border-dark-500 dark:bg-dark-700 dark:text-dark-100" value={form.usuario_id} onChange={(e) => setForm({ ...form, usuario_id: e.target.value })}>
-                    <option value="">Seleccionar usuario</option>
-                    {usuarios.map((u) => (<option key={u.id} value={u.id}>{u.nombre} {u.apellido}</option>))}
+                  <label className="mb-1 block text-xs-plus font-medium text-gray-700 dark:text-dark-100">Cita asociada *</label>
+                  <select
+                    required
+                    disabled={!form.usuario_id}
+                    className="form-select w-full rounded-lg border border-gray-300 bg-white px-3 py-2 text-sm disabled:opacity-50 dark:border-dark-500 dark:bg-dark-700 dark:text-dark-100"
+                    value={form.cita_id}
+                    onChange={(e) => {
+                      const citaId = e.target.value;
+                      const cita = citasDoctor.find((c) => String(c.id) === citaId);
+                      setForm({
+                        ...form,
+                        cita_id: citaId,
+                        paciente_id: cita ? String(cita.paciente_id) : form.paciente_id,
+                        fecha_emision: form.fecha_emision || new Date().toISOString().split("T")[0],
+                      });
+                    }}
+                  >
+                    <option value="">{form.usuario_id ? (citasDoctor.length === 0 ? "Sin citas completadas" : "Seleccionar cita") : "Seleccione un odontólogo primero"}</option>
+                    {citasDoctor.map((c) => (
+                      <option key={c.id} value={c.id}>
+                        {c.fecha?.split("T")[0]} — {c.paciente_nombre} {c.paciente_apellido} — {c.especialidad_nombre}
+                      </option>
+                    ))}
+                  </select>
+                </div>
+                {/* Paciente (auto-llenado desde la cita) */}
+                <div>
+                  <label className="mb-1 block text-xs-plus font-medium text-gray-700 dark:text-dark-100">Paciente *</label>
+                  <select
+                    required
+                    className="form-select w-full rounded-lg border border-gray-300 bg-white px-3 py-2 text-sm dark:border-dark-500 dark:bg-dark-700 dark:text-dark-100"
+                    value={form.paciente_id}
+                    onChange={(e) => setForm({ ...form, paciente_id: e.target.value })}
+                  >
+                    <option value="">Seleccionar paciente</option>
+                    {pacientes.map((p) => (<option key={p.id} value={p.id}>{p.nombre} {p.apellido} — {p.cedula}</option>))}
                   </select>
                 </div>
                 <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-                  <Input label="Fecha Emision" type="date" value={form.fecha_emision} onChange={(e) => setForm({ ...form, fecha_emision: e.target.value })} />
-                  <Input label="Total ($)" type="number" step="0.01" value={form.total} onChange={(e) => setForm({ ...form, total: e.target.value })} />
+                  <Input label="Fecha Emisión" type="date" value={form.fecha_emision} onChange={(e) => setForm({ ...form, fecha_emision: e.target.value })} />
+                  <Input label="Total ($)" type="number" step="0.01" min="0" value={form.total} onChange={(e) => setForm({ ...form, total: e.target.value })} />
                 </div>
                 <div>
-                  <label className="mb-1 block text-xs-plus font-medium text-gray-700 dark:text-dark-100">Metodo de Pago</label>
+                  <label className="mb-1 block text-xs-plus font-medium text-gray-700 dark:text-dark-100">Método de Pago</label>
                   <select className="form-select w-full rounded-lg border border-gray-300 bg-white px-3 py-2 text-sm dark:border-dark-500 dark:bg-dark-700 dark:text-dark-100" value={form.metodo_pago} onChange={(e) => setForm({ ...form, metodo_pago: e.target.value })}>
                     <option value="">Seleccionar</option>
                     <option value="Efectivo">Efectivo</option>

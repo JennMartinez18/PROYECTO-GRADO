@@ -1,6 +1,6 @@
-﻿import { useEffect, useState, useCallback } from "react";
+﻿import { useEffect, useState, useCallback, useMemo } from "react";
 import { Page } from "components/shared/Page";
-import { Button, Card, Input } from "components/ui";
+import { Button, Card, Input, Table, THead, TBody, Tr, Th, Td } from "components/ui";
 import {
   PlusIcon,
   PencilSquareIcon,
@@ -8,11 +8,19 @@ import {
   MagnifyingGlassIcon,
   XMarkIcon,
   UserGroupIcon,
-  PhoneIcon,
-  EnvelopeIcon,
 } from "@heroicons/react/24/outline";
 import axios from "utils/axios";
 import { toast } from "sonner";
+import {
+  useReactTable,
+  getCoreRowModel,
+  getFilteredRowModel,
+  getPaginationRowModel,
+  getSortedRowModel,
+  flexRender,
+} from "@tanstack/react-table";
+import { PaginationSection } from "components/shared/table/PaginationSection";
+import { TableSortIcon } from "components/shared/table/TableSortIcon";
 
 const emptyForm = {
   cedula: "",
@@ -48,13 +56,6 @@ export default function Pacientes() {
   useEffect(() => {
     fetchPacientes();
   }, [fetchPacientes]);
-
-  const filtered = pacientes.filter(
-    (p) =>
-      p.nombre?.toLowerCase().includes(search.toLowerCase()) ||
-      p.apellido?.toLowerCase().includes(search.toLowerCase()) ||
-      p.cedula?.toLowerCase().includes(search.toLowerCase())
-  );
 
   const validate = () => {
     const e = {};
@@ -125,6 +126,94 @@ export default function Pacientes() {
     setShowModal(true);
   };
 
+  // --- TanStack Table ---
+  const [sorting, setSorting] = useState([]);
+
+  const columns = useMemo(() => [
+    {
+      id: "nombre",
+      header: "Paciente",
+      accessorFn: (row) => `${row.nombre || ""} ${row.apellido || ""}`,
+      cell: ({ row }) => {
+        const pac = row.original;
+        return (
+          <div className="flex items-center gap-3">
+            <div className="flex size-8 items-center justify-center rounded-full bg-indigo-100 text-xs font-bold text-indigo-600 dark:bg-indigo-500/15 dark:text-indigo-400">
+              {pac.nombre?.[0]}{pac.apellido?.[0]}
+            </div>
+            <div>
+              <span className="font-medium text-gray-800 dark:text-dark-50">{pac.nombre} {pac.apellido}</span>
+              <p className="text-xs text-gray-400 dark:text-dark-300">CI: {pac.cedula}</p>
+            </div>
+          </div>
+        );
+      },
+    },
+    {
+      accessorKey: "telefono",
+      header: "Teléfono",
+      cell: ({ getValue }) => getValue() || "—",
+    },
+    {
+      accessorKey: "email",
+      header: "Email",
+      cell: ({ getValue }) => getValue() || "—",
+    },
+    {
+      accessorKey: "genero",
+      header: "Género",
+      cell: ({ getValue }) => {
+        const g = getValue();
+        if (!g) return "—";
+        return (
+          <span className={`rounded-full px-2 py-0.5 text-xs font-medium ${g === "M" ? "bg-blue-100 text-blue-700 dark:bg-blue-500/15 dark:text-blue-400" : "bg-pink-100 text-pink-700 dark:bg-pink-500/15 dark:text-pink-400"}`}>
+            {g === "M" ? "Masculino" : "Femenino"}
+          </span>
+        );
+      },
+    },
+    {
+      accessorKey: "tipo_sangre",
+      header: "Tipo Sangre",
+      cell: ({ getValue }) => {
+        const ts = getValue();
+        return ts ? (
+          <span className="rounded-full bg-rose-100 px-2 py-0.5 text-xs font-medium text-rose-700 dark:bg-rose-500/15 dark:text-rose-400">{ts}</span>
+        ) : "—";
+      },
+    },
+    {
+      id: "acciones",
+      header: "Acciones",
+      enableSorting: false,
+      cell: ({ row }) => {
+        const pac = row.original;
+        return (
+          <div className="flex items-center gap-1">
+            <button onClick={() => handleEdit(pac)} className="rounded-lg p-1.5 text-gray-400 transition-colors hover:bg-gray-100 hover:text-indigo-600 dark:hover:bg-dark-600 dark:hover:text-indigo-400">
+              <PencilSquareIcon className="size-4" />
+            </button>
+            <button onClick={() => handleDelete(pac.id)} className="rounded-lg p-1.5 text-gray-400 transition-colors hover:bg-red-50 hover:text-red-500 dark:hover:bg-red-500/10 dark:hover:text-red-400">
+              <TrashIcon className="size-4" />
+            </button>
+          </div>
+        );
+      },
+    },
+  ], []);
+
+  const table = useReactTable({
+    data: pacientes,
+    columns,
+    state: { globalFilter: search, sorting },
+    onGlobalFilterChange: setSearch,
+    onSortingChange: setSorting,
+    getCoreRowModel: getCoreRowModel(),
+    getFilteredRowModel: getFilteredRowModel(),
+    getSortedRowModel: getSortedRowModel(),
+    getPaginationRowModel: getPaginationRowModel(),
+  });
+
   return (
     <Page title="Pacientes">
       <div className="transition-content w-full px-(--margin-x) pb-8 pt-5 lg:pt-6">
@@ -159,72 +248,50 @@ export default function Pacientes() {
           </div>
         </div>
 
-        {/* Cards Grid */}
-        <div className="mt-5">
-          {filtered.length === 0 ? (
-            <Card className="rounded-xl p-10">
-              <div className="flex flex-col items-center text-center">
-                <UserGroupIcon className="size-14 text-gray-200 dark:text-dark-500" />
-                <p className="mt-4 text-sm font-medium text-gray-400 dark:text-dark-300">No se encontraron pacientes</p>
-              </div>
-            </Card>
-          ) : (
-            <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-3">
-              {filtered.map((pac) => (
-                <Card key={pac.id} className="group relative overflow-hidden rounded-xl p-4 transition-all hover:shadow-lg">
-                  <div className="absolute inset-0 bg-gradient-to-br from-indigo-500 to-blue-600 opacity-0 transition-opacity group-hover:opacity-[0.02]" />
-                  <div className="relative">
-                    <div className="flex items-start justify-between">
-                      <div className="flex items-center gap-3">
-                        <div className="flex size-10 items-center justify-center rounded-full bg-indigo-100 text-sm font-bold text-indigo-600 dark:bg-indigo-500/15 dark:text-indigo-400">
-                          {pac.nombre?.[0]}{pac.apellido?.[0]}
+        {/* Table */}
+        <Card className="mt-5 rounded-xl">
+          <div className="scrollbar-sm min-w-full overflow-x-auto">
+            <Table hoverable className="w-full text-left">
+              <THead>
+                {table.getHeaderGroups().map((hg) => (
+                  <Tr key={hg.id}>
+                    {hg.headers.map((header) => (
+                      <Th key={header.id} className="cursor-pointer select-none whitespace-nowrap px-4 py-3" onClick={header.column.getToggleSortingHandler()}>
+                        <div className="flex items-center gap-2 text-xs font-semibold uppercase tracking-wider">
+                          {flexRender(header.column.columnDef.header, header.getContext())}
+                          {header.column.getCanSort() && <TableSortIcon sorted={header.column.getIsSorted()} />}
                         </div>
-                        <div>
-                          <p className="text-sm font-semibold text-gray-800 dark:text-dark-50">{pac.nombre} {pac.apellido}</p>
-                          <p className="text-xs text-gray-400 dark:text-dark-300">CI: {pac.cedula}</p>
-                        </div>
-                      </div>
-                      <div className="flex gap-1">
-                        <button onClick={() => handleEdit(pac)} className="rounded-lg p-1.5 text-gray-400 transition-colors hover:bg-gray-100 hover:text-indigo-600 dark:hover:bg-dark-600 dark:hover:text-indigo-400">
-                          <PencilSquareIcon className="size-4" />
-                        </button>
-                        <button onClick={() => handleDelete(pac.id)} className="rounded-lg p-1.5 text-gray-400 transition-colors hover:bg-red-50 hover:text-red-500 dark:hover:bg-red-500/10 dark:hover:text-red-400">
-                          <TrashIcon className="size-4" />
-                        </button>
-                      </div>
-                    </div>
-                    <div className="mt-3 space-y-1.5">
-                      {pac.telefono && (
-                        <div className="flex items-center gap-2 text-xs text-gray-500 dark:text-dark-300">
-                          <PhoneIcon className="size-3.5" />
-                          <span>{pac.telefono}</span>
-                        </div>
-                      )}
-                      {pac.email && (
-                        <div className="flex items-center gap-2 text-xs text-gray-500 dark:text-dark-300">
-                          <EnvelopeIcon className="size-3.5" />
-                          <span className="truncate">{pac.email}</span>
-                        </div>
-                      )}
-                    </div>
-                    <div className="mt-3 flex flex-wrap gap-1.5">
-                      {pac.genero && (
-                        <span className={`rounded-full px-2 py-0.5 text-xs font-medium ${pac.genero === "M" ? "bg-blue-100 text-blue-700 dark:bg-blue-500/15 dark:text-blue-400" : "bg-pink-100 text-pink-700 dark:bg-pink-500/15 dark:text-pink-400"}`}>
-                          {pac.genero === "M" ? "Masculino" : "Femenino"}
-                        </span>
-                      )}
-                      {pac.tipo_sangre && (
-                        <span className="rounded-full bg-rose-100 px-2 py-0.5 text-xs font-medium text-rose-700 dark:bg-rose-500/15 dark:text-rose-400">
-                          {pac.tipo_sangre}
-                        </span>
-                      )}
-                    </div>
-                  </div>
-                </Card>
-              ))}
-            </div>
-          )}
-        </div>
+                      </Th>
+                    ))}
+                  </Tr>
+                ))}
+              </THead>
+              <TBody>
+                {table.getRowModel().rows.length === 0 ? (
+                  <Tr>
+                    <Td colSpan={columns.length} className="py-10 text-center">
+                      <UserGroupIcon className="mx-auto size-10 text-gray-200 dark:text-dark-500" />
+                      <p className="mt-2 text-sm text-gray-400 dark:text-dark-300">No se encontraron pacientes</p>
+                    </Td>
+                  </Tr>
+                ) : (
+                  table.getRowModel().rows.map((row) => (
+                    <Tr key={row.id}>
+                      {row.getVisibleCells().map((cell) => (
+                        <Td key={cell.id} className="whitespace-nowrap px-4 py-3 text-sm">
+                          {flexRender(cell.column.columnDef.cell, cell.getContext())}
+                        </Td>
+                      ))}
+                    </Tr>
+                  ))
+                )}
+              </TBody>
+            </Table>
+          </div>
+          <div className="border-t border-gray-200 px-4 py-4 dark:border-dark-500">
+            <PaginationSection table={table} />
+          </div>
+        </Card>
 
         {/* Modal */}
         {showModal && (

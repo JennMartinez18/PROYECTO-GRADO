@@ -1,7 +1,7 @@
 from fastapi import APIRouter, Depends
 from controllers.Usuarios_Controller import Usuarios_Controller
 from models.Usuarios_Model import Usuario
-from config.auth import require_admin
+from config.auth import require_admin, require_staff
 
 router = APIRouter()
 
@@ -22,7 +22,7 @@ async def listar_usuarios(current_user: dict = Depends(require_admin)):
     description="Obtiene la lista de odontólogos activos en el sistema.",
     response_description="Lista de doctores",
 )
-async def obtener_doctores(current_user: dict = Depends(require_admin)):
+async def obtener_doctores(current_user: dict = Depends(require_staff)):
     return Usuarios_Controller.obtener_doctores()
 
 

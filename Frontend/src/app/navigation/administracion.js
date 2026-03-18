@@ -3,6 +3,7 @@ import {
     AcademicCapIcon,
     UsersIcon,
     ShieldCheckIcon,
+    ChartBarIcon,
 } from '@heroicons/react/24/outline';
 import SettingIcon from 'assets/dualicons/setting.svg?react';
 import { NAV_TYPE_ROOT, NAV_TYPE_ITEM } from 'constants/app.constant';
@@ -46,6 +47,14 @@ export const administracion = {
             title: 'Roles',
             transKey: 'Gestión Roles',
             Icon: ShieldCheckIcon,
+        },
+        {
+            id: 'admin.reportes',
+            path: '/admin/reportes',
+            type: NAV_TYPE_ITEM,
+            title: 'Reportes',
+            transKey: 'Gestión Reportes',
+            Icon: ChartBarIcon,
         },
     ],
 };

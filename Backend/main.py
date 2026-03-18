@@ -11,6 +11,7 @@ from routes.Historias_clinicas_Routes import router as historias_clinicas_router
 from routes.Historia_tratamientos_Routes import router as historia_tratamientos_router
 from routes.Facturas_Routes import router as facturas_router
 from routes.Dashboard_Routes import router as dashboard_router
+from routes.Reportes_Routes import router as reportes_router
 from fastapi.middleware.cors import CORSMiddleware
 
 app = FastAPI(
@@ -66,6 +67,7 @@ app.include_router(facturas_router, tags=["💰 Facturas"])
 app.include_router(especialidades_router, tags=["⚕️ Especialidades"])
 app.include_router(usuarios_router, tags=["👥 Usuarios"])
 app.include_router(roles_router, tags=["🔑 Roles"])
+app.include_router(reportes_router, prefix="/reportes", tags=["📈 Reportes"])
 
 if __name__ == "__main__":
     uvicorn.run(app, host="0.0.0.0", port=8000)

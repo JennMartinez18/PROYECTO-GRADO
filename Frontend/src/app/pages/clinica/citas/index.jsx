@@ -1,6 +1,6 @@
-﻿import { useEffect, useState, useCallback } from "react";
+﻿import { useEffect, useState, useCallback, useMemo } from "react";
 import { Page } from "components/shared/Page";
-import { Button, Card, Input } from "components/ui";
+import { Button, Card, Input, Table, THead, TBody, Tr, Th, Td } from "components/ui";
 import {
   PlusIcon,
   PencilSquareIcon,
@@ -16,6 +16,16 @@ import {
 import axios from "utils/axios";
 import { toast } from "sonner";
 import { formatHora } from "utils/formatHora";
+import {
+  useReactTable,
+  getCoreRowModel,
+  getFilteredRowModel,
+  getPaginationRowModel,
+  getSortedRowModel,
+  flexRender,
+} from "@tanstack/react-table";
+import { PaginationSection } from "components/shared/table/PaginationSection";
+import { TableSortIcon } from "components/shared/table/TableSortIcon";
 
 const emptyForm = {
   paciente_id: "",
@@ -46,7 +56,7 @@ export default function Citas() {
       const [citasR, pacR, usrR, espR] = await Promise.all([
         axios.get("/citas"),
         axios.get("/pacientes"),
-        axios.get("/usuarios"),
+        axios.get("/usuarios/doctores"),
         axios.get("/especialidades"),
       ]);
       if (Array.isArray(citasR.data.resultado)) setCitas(citasR.data.resultado);
@@ -98,14 +108,6 @@ export default function Citas() {
   const getCitaEnFranja = (slot) => {
     return citasDoctor.find((c) => formatHora(c.hora) === slot);
   };
-
-  const filtered = citas.filter((c) => {
-    const matchSearch =
-      c.paciente_nombre?.toLowerCase().includes(search.toLowerCase()) ||
-      c.motivo_consulta?.toLowerCase().includes(search.toLowerCase());
-    const matchEstado = filtroEstado === "Todas" || c.estado === filtroEstado;
-    return matchSearch && matchEstado;
-  });
 
   const handleSubmit = async (e) => {
     e.preventDefault();
@@ -188,6 +190,95 @@ export default function Citas() {
 
   const tabs = ["Todas", "Programada", "Confirmada", "En_Curso", "Completada", "Cancelada", "No_Asistio"];
 
+  // --- TanStack Table ---
+  const [sorting, setSorting] = useState([]);
+
+  const estadoFiltered = useMemo(
+    () => citas.filter((c) => filtroEstado === "Todas" || c.estado === filtroEstado),
+    [citas, filtroEstado]
+  );
+
+  const columns = useMemo(() => [
+    {
+      accessorKey: "fecha",
+      header: "Fecha",
+      cell: ({ getValue }) => getValue()?.split("T")[0] || "",
+    },
+    {
+      accessorKey: "hora",
+      header: "Hora",
+      cell: ({ getValue }) => formatHora(getValue()),
+    },
+    {
+      id: "paciente",
+      header: "Paciente",
+      accessorFn: (row) => `${row.paciente_nombre || ""} ${row.paciente_apellido || ""}`,
+    },
+    {
+      accessorKey: "motivo_consulta",
+      header: "Motivo",
+      cell: ({ getValue }) => getValue() || "Consulta general",
+    },
+    {
+      accessorKey: "consultorio",
+      header: "Consultorio",
+    },
+    {
+      accessorKey: "estado",
+      header: "Estado",
+      cell: ({ getValue }) => {
+        const estado = getValue();
+        return (
+          <span className={`inline-flex items-center gap-1 rounded-full px-2.5 py-1 text-xs font-semibold ${estadoColor(estado)}`}>
+            {estadoIcon(estado)}
+            {estado?.replace("_", " ")}
+          </span>
+        );
+      },
+    },
+    {
+      id: "acciones",
+      header: "Acciones",
+      enableSorting: false,
+      cell: ({ row }) => {
+        const c = row.original;
+        return (
+          <div className="flex items-center gap-1">
+            {(c.estado === "Programada" || c.estado === "Confirmada") && (
+              <>
+                <button onClick={() => handleChangeEstado(c.id, "En_Curso")} className="rounded-lg px-2 py-1 text-xs font-medium text-blue-600 transition-colors hover:bg-blue-50 dark:text-blue-400 dark:hover:bg-blue-500/10">En Curso</button>
+                <button onClick={() => handleChangeEstado(c.id, "Completada")} className="rounded-lg px-2 py-1 text-xs font-medium text-emerald-600 transition-colors hover:bg-emerald-50 dark:text-emerald-400 dark:hover:bg-emerald-500/10">Completar</button>
+                <button onClick={() => handleChangeEstado(c.id, "No_Asistio")} className="rounded-lg px-2 py-1 text-xs font-medium text-orange-500 transition-colors hover:bg-orange-50 dark:text-orange-400 dark:hover:bg-orange-500/10">No Asistió</button>
+                <button onClick={() => handleChangeEstado(c.id, "Cancelada")} className="rounded-lg px-2 py-1 text-xs font-medium text-red-500 transition-colors hover:bg-red-50 dark:text-red-400 dark:hover:bg-red-500/10">Cancelar</button>
+              </>
+            )}
+            {c.estado === "En_Curso" && (
+              <button onClick={() => handleChangeEstado(c.id, "Completada")} className="rounded-lg px-2 py-1 text-xs font-medium text-emerald-600 transition-colors hover:bg-emerald-50 dark:text-emerald-400 dark:hover:bg-emerald-500/10">Completar</button>
+            )}
+            <button onClick={() => handleEdit(c)} className="rounded-lg p-1.5 text-gray-400 transition-colors hover:bg-gray-100 hover:text-gray-600 dark:hover:bg-dark-600">
+              <PencilSquareIcon className="size-4" />
+            </button>
+            <button onClick={() => handleDelete(c.id)} className="rounded-lg p-1.5 text-gray-400 transition-colors hover:bg-red-50 hover:text-red-500 dark:hover:bg-red-500/10">
+              <TrashIcon className="size-4" />
+            </button>
+          </div>
+        );
+      },
+    },
+  ], []);
+
+  const table = useReactTable({
+    data: estadoFiltered,
+    columns,
+    state: { globalFilter: search, sorting },
+    onGlobalFilterChange: setSearch,
+    onSortingChange: setSorting,
+    getCoreRowModel: getCoreRowModel(),
+    getFilteredRowModel: getFilteredRowModel(),
+    getSortedRowModel: getSortedRowModel(),
+    getPaginationRowModel: getPaginationRowModel(),
+  });
+
   return (
     <Page title="Citas">
       <div className="transition-content w-full px-(--margin-x) pb-8 pt-5 lg:pt-6">
@@ -233,55 +324,50 @@ export default function Citas() {
           </div>
         </div>
 
-        {/* Citas List */}
-        <div className="mt-4 space-y-2">
-          {filtered.length === 0 ? (
-            <Card className="rounded-xl p-10">
-              <div className="flex flex-col items-center text-center">
-                <CalendarDaysIcon className="size-14 text-gray-200 dark:text-dark-500" />
-                <p className="mt-4 text-sm font-medium text-gray-400 dark:text-dark-300">No se encontraron citas</p>
-              </div>
-            </Card>
-          ) : (
-            filtered.map((c) => (
-              <Card key={c.id} className="group rounded-xl p-4 transition-all hover:shadow-md">
-                <div className="flex items-center gap-4">
-                  <div className="hidden flex-col items-center rounded-xl bg-emerald-50 px-3 py-2 sm:flex dark:bg-emerald-500/10">
-                    <span className="text-xs font-medium text-emerald-600 dark:text-emerald-400">{c.fecha?.split("T")[0]}</span>
-                    <span className="text-lg font-bold text-emerald-700 dark:text-emerald-300">{formatHora(c.hora)}</span>
-                  </div>
-                  <div className="min-w-0 flex-1">
-                    <p className="text-sm font-semibold text-gray-800 dark:text-dark-50">{c.paciente_nombre} {c.paciente_apellido}</p>
-                    <p className="text-xs text-gray-400 dark:text-dark-300">{c.motivo_consulta || "Consulta general"} {c.consultorio ? ("  " + c.consultorio) : ""}</p>
-                  </div>
-                  <span className={`inline-flex items-center gap-1 rounded-full px-2.5 py-1 text-xs font-semibold ${estadoColor(c.estado)}`}>
-                    {estadoIcon(c.estado)}
-                    {c.estado?.replace("_", " ")}
-                  </span>
-                  <div className="flex items-center gap-1">
-                    {(c.estado === "Programada" || c.estado === "Confirmada") && (
-                      <>
-                        <button onClick={() => handleChangeEstado(c.id, "En_Curso")} className="rounded-lg px-2 py-1 text-xs font-medium text-blue-600 transition-colors hover:bg-blue-50 dark:text-blue-400 dark:hover:bg-blue-500/10">En Curso</button>
-                        <button onClick={() => handleChangeEstado(c.id, "Completada")} className="rounded-lg px-2 py-1 text-xs font-medium text-emerald-600 transition-colors hover:bg-emerald-50 dark:text-emerald-400 dark:hover:bg-emerald-500/10">Completar</button>
-                        <button onClick={() => handleChangeEstado(c.id, "No_Asistio")} className="rounded-lg px-2 py-1 text-xs font-medium text-orange-500 transition-colors hover:bg-orange-50 dark:text-orange-400 dark:hover:bg-orange-500/10">No Asistió</button>
-                        <button onClick={() => handleChangeEstado(c.id, "Cancelada")} className="rounded-lg px-2 py-1 text-xs font-medium text-red-500 transition-colors hover:bg-red-50 dark:text-red-400 dark:hover:bg-red-500/10">Cancelar</button>
-                      </>
-                    )}
-                    {c.estado === "En_Curso" && (
-                      <button onClick={() => handleChangeEstado(c.id, "Completada")} className="rounded-lg px-2 py-1 text-xs font-medium text-emerald-600 transition-colors hover:bg-emerald-50 dark:text-emerald-400 dark:hover:bg-emerald-500/10">Completar</button>
-                    )}
-                    <button onClick={() => handleEdit(c)} className="rounded-lg p-1.5 text-gray-400 transition-colors hover:bg-gray-100 hover:text-gray-600 dark:hover:bg-dark-600">
-                      <PencilSquareIcon className="size-4" />
-                    </button>
-                    <button onClick={() => handleDelete(c.id)} className="rounded-lg p-1.5 text-gray-400 transition-colors hover:bg-red-50 hover:text-red-500 dark:hover:bg-red-500/10">
-                      <TrashIcon className="size-4" />
-                    </button>
-                  </div>
-                </div>
-              </Card>
-            ))
-          )}
-        </div>
+        {/* Citas Table */}
+        <Card className="mt-4 rounded-xl">
+          <div className="scrollbar-sm min-w-full overflow-x-auto">
+            <Table hoverable className="w-full text-left">
+              <THead>
+                {table.getHeaderGroups().map((hg) => (
+                  <Tr key={hg.id}>
+                    {hg.headers.map((header) => (
+                      <Th key={header.id} className="cursor-pointer select-none whitespace-nowrap px-4 py-3" onClick={header.column.getToggleSortingHandler()}>
+                        <div className="flex items-center gap-2 text-xs font-semibold uppercase tracking-wider">
+                          {flexRender(header.column.columnDef.header, header.getContext())}
+                          {header.column.getCanSort() && <TableSortIcon sorted={header.column.getIsSorted()} />}
+                        </div>
+                      </Th>
+                    ))}
+                  </Tr>
+                ))}
+              </THead>
+              <TBody>
+                {table.getRowModel().rows.length === 0 ? (
+                  <Tr>
+                    <Td colSpan={columns.length} className="py-10 text-center">
+                      <CalendarDaysIcon className="mx-auto size-10 text-gray-200 dark:text-dark-500" />
+                      <p className="mt-2 text-sm text-gray-400 dark:text-dark-300">No se encontraron citas</p>
+                    </Td>
+                  </Tr>
+                ) : (
+                  table.getRowModel().rows.map((row) => (
+                    <Tr key={row.id}>
+                      {row.getVisibleCells().map((cell) => (
+                        <Td key={cell.id} className="whitespace-nowrap px-4 py-3 text-sm">
+                          {flexRender(cell.column.columnDef.cell, cell.getContext())}
+                        </Td>
+                      ))}
+                    </Tr>
+                  ))
+                )}
+              </TBody>
+            </Table>
+          </div>
+          <div className="border-t border-gray-200 px-4 py-4 dark:border-dark-500">
+            <PaginationSection table={table} />
+          </div>
+        </Card>
 
         {/* Modal */}
         {showModal && (
@@ -312,7 +398,7 @@ export default function Citas() {
                   <label className="mb-1 block text-xs-plus font-medium text-gray-700 dark:text-dark-100">Odontologo</label>
                   <select className="form-select w-full rounded-lg border border-gray-300 bg-white px-3 py-2 text-sm dark:border-dark-500 dark:bg-dark-700 dark:text-dark-100" value={form.usuario_id} onChange={(e) => setForm({ ...form, usuario_id: e.target.value })}>
                     <option value="">Seleccionar odontologo</option>
-                    {usuarios.filter(u => u.rol_id === 4 || u.rol_id === 1).map((u) => (<option key={u.id} value={u.id}>{u.nombre} {u.apellido}</option>))}
+                    {usuarios.map((u) => (<option key={u.id} value={u.id}>{u.nombre} {u.apellido}</option>))}
                   </select>
                 </div>
                 <div>

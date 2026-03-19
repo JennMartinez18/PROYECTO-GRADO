@@ -3,7 +3,6 @@ import {
   CalendarDaysIcon,
   UserGroupIcon,
   ClipboardDocumentListIcon,
-  BeakerIcon,
 } from "@heroicons/react/24/outline";
 import { NAV_TYPE_ROOT, NAV_TYPE_ITEM } from "constants/app.constant";
 
@@ -46,14 +45,6 @@ export const odontologo = {
       title: "Historias Clínicas",
       transKey: "Historias Odontólogo",
       Icon: ClipboardDocumentListIcon,
-    },
-    {
-      id: "odontologo.tratamientos",
-      path: "/odontologo/tratamientos",
-      type: NAV_TYPE_ITEM,
-      title: "Tratamientos",
-      transKey: "Tratamientos Odontólogo",
-      Icon: BeakerIcon,
     },
   ],
 };

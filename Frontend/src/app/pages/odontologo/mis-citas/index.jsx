@@ -269,7 +269,7 @@ export default function OdontologoMisCitas() {
       map[key].push(c);
     });
     // Ordenar por hora dentro de cada día
-    Object.values(map).forEach((arr) => arr.sort((a, b) => (a.hora || "").localeCompare(b.hora || "")));
+    Object.values(map).forEach((arr) => arr.sort((a, b) => String(a.hora || "").localeCompare(String(b.hora || ""))));
     return map;
   }, [calCitas, filtro]);
 

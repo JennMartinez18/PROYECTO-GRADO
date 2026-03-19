@@ -9,7 +9,7 @@ export const baseNavigation = [
         type: NAV_TYPE_ITEM,
         path: '/dashboards',
         title: 'Dashboard',
-        transKey: 'nav.dashboards.dashboards',
+        transKey: 'Dashboards',
         Icon: DashboardsIcon,
     },
     {
@@ -17,7 +17,7 @@ export const baseNavigation = [
         type: NAV_TYPE_ITEM,
         path: '/clinica',
         title: 'Clínica',
-        transKey: 'nav.clinica.clinica',
+        transKey: 'Clinica',
         Icon: ClipboardDocumentListIcon,
     },
     {
@@ -25,7 +25,7 @@ export const baseNavigation = [
         type: NAV_TYPE_ITEM,
         path: '/admin',
         title: 'Administración',
-        transKey: 'nav.admin.admin',
+        transKey: 'Administracion',
         Icon: SettingIcon,
     },
 ]

@@ -5,7 +5,6 @@ import {
   CalendarDaysIcon,
   UserGroupIcon,
   ClipboardDocumentListIcon,
-  BeakerIcon,
   ClockIcon,
   CheckCircleIcon,
   ArrowTrendingUpIcon,
@@ -40,7 +39,6 @@ export default function OdontologoInicio() {
   const statCards = [
     { title: "Citas Hoy", value: metrics?.citas_hoy ?? "—", Icon: CalendarDaysIcon, gradient: "from-indigo-500 to-blue-600" },
     { title: "Mis Pacientes", value: metrics?.total_pacientes ?? "—", Icon: UserGroupIcon, gradient: "from-emerald-500 to-teal-600" },
-    { title: "Tratamientos Activos", value: metrics?.tratamientos_activos ?? "—", Icon: BeakerIcon, gradient: "from-amber-500 to-orange-600" },
     { title: "Citas Próximas", value: metrics?.citas_proximas ?? "—", Icon: ClockIcon, gradient: "from-violet-500 to-purple-600" },
     { title: "Historias Clínicas", value: metrics?.total_historias ?? "—", Icon: ClipboardDocumentListIcon, gradient: "from-rose-500 to-pink-600" },
     { title: "Completadas este Mes", value: metrics?.completadas_mes ?? "—", Icon: CheckCircleIcon, gradient: "from-cyan-500 to-teal-600" },

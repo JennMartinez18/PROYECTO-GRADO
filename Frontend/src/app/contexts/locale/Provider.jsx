@@ -26,8 +26,9 @@ export function LocaleProvider({ children }) {
   const updateLocale = useCallback(async (newLocale) => {
     try {
       // Dynamically load the locale and update dependencies
-      await locales[newLocale].dayjs();
-      dayjs.locale(newLocale);
+      const safeLocale = locales[newLocale] ? newLocale : "en";
+      await locales[safeLocale].dayjs();
+      dayjs.locale(safeLocale);
       const i18nResources = await locales[newLocale].i18n();
       i18n.addResourceBundle(newLocale, "translations", i18nResources);
       i18n.changeLanguage(newLocale);

@@ -16,6 +16,7 @@ import {
   HeartIcon,
   UserIcon,
   CalendarDaysIcon,
+  ExclamationTriangleIcon,
 } from "@heroicons/react/24/outline";
 import axios from "utils/axios";
 import { toast } from "sonner";
@@ -55,6 +56,8 @@ export default function Pacientes() {
   const [expedientePac, setExpedientePac] = useState(null);
   const [historias, setHistorias] = useState([]);
   const [loadingHistorias, setLoadingHistorias] = useState(false);
+  const [showConfirmDelete, setShowConfirmDelete] = useState(false);
+  const [deleteTarget, setDeleteTarget] = useState(null);
 
   const fetchPacientes = useCallback(async () => {
     try {
@@ -119,12 +122,19 @@ export default function Pacientes() {
     setShowModal(true);
   };
 
-  const handleDelete = async (id) => {
-    if (!window.confirm("¿Esta seguro de eliminar este paciente?")) return;
+  const handleDelete = (pac) => {
+    setDeleteTarget(pac);
+    setShowConfirmDelete(true);
+  };
+
+  const confirmDelete = async () => {
+    if (!deleteTarget) return;
     try {
-      const res = await axios.delete(`/pacientes/${id}`);
+      const res = await axios.delete(`/pacientes/${deleteTarget.id}`);
       if (res.data.resultado && typeof res.data.resultado === "string") { toast.error(res.data.resultado); return; }
       toast.success(res.data.informacion || "Paciente eliminado");
+      setShowConfirmDelete(false);
+      setDeleteTarget(null);
       fetchPacientes();
     } catch {
       toast.error("Error al eliminar");
@@ -227,7 +237,7 @@ export default function Pacientes() {
             <button onClick={() => handleEdit(pac)} className="rounded-lg p-1.5 text-gray-400 transition-colors hover:bg-gray-100 hover:text-indigo-600 dark:hover:bg-dark-600 dark:hover:text-indigo-400">
               <PencilSquareIcon className="size-4" />
             </button>
-            <button onClick={() => handleDelete(pac.id)} className="rounded-lg p-1.5 text-gray-400 transition-colors hover:bg-red-50 hover:text-red-500 dark:hover:bg-red-500/10 dark:hover:text-red-400">
+            <button onClick={() => handleDelete(pac)} className="rounded-lg p-1.5 text-gray-400 transition-colors hover:bg-red-50 hover:text-red-500 dark:hover:bg-red-500/10 dark:hover:text-red-400">
               <TrashIcon className="size-4" />
             </button>
           </div>
@@ -326,6 +336,45 @@ export default function Pacientes() {
             <PaginationSection table={table} />
           </div>
         </Card>
+
+        {/* Modal Confirmar Eliminación */}
+        {showConfirmDelete && deleteTarget && (
+          <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/40 backdrop-blur-sm">
+            <Card className="w-full max-w-sm rounded-2xl p-6 shadow-2xl">
+              <div className="flex flex-col items-center text-center gap-3">
+                <div className="flex size-14 items-center justify-center rounded-full bg-red-100 dark:bg-red-500/15">
+                  <ExclamationTriangleIcon className="size-7 text-red-500 dark:text-red-400" />
+                </div>
+                <div>
+                  <h3 className="text-base font-bold text-gray-800 dark:text-dark-50">¿Eliminar paciente?</h3>
+                  <p className="mt-1 text-sm text-gray-500 dark:text-dark-300">
+                    Estás a punto de eliminar a{" "}
+                    <span className="font-semibold text-gray-700 dark:text-dark-100">
+                      {deleteTarget.nombre} {deleteTarget.apellido}
+                    </span>.
+                    Esta acción no se puede deshacer.
+                  </p>
+                </div>
+              </div>
+              <div className="mt-6 flex justify-center gap-3">
+                <Button
+                  variant="outlined"
+                  className="rounded-xl"
+                  onClick={() => { setShowConfirmDelete(false); setDeleteTarget(null); }}
+                >
+                  Cancelar
+                </Button>
+                <Button
+                  color="error"
+                  className="rounded-xl bg-red-500 text-white hover:bg-red-600"
+                  onClick={confirmDelete}
+                >
+                  Eliminar
+                </Button>
+              </div>
+            </Card>
+          </div>
+        )}
 
         {/* Modal Expediente */}
         {showExpediente && expedientePac && (

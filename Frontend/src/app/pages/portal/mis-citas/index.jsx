@@ -187,7 +187,7 @@ function ModalProgramarCita({ user, onClose, onSuccess }) {
   const [step, setStep] = useState(1);
   const [especialidades, setEspecialidades] = useState([]);
   const [doctores, setDoctores] = useState([]);
-  const [slots, setSlots] = useState([]);
+  const [citasDoctor, setCitasDoctor] = useState([]);
   const [loading, setLoading] = useState(false);
 
   // Form state
@@ -202,6 +202,21 @@ function ModalProgramarCita({ user, onClose, onSuccess }) {
 
   // Calendario mini
   const [calMonth, setCalMonth] = useState(dayjs());
+
+  // Generar franjas horarias de 8:00 a 18:00 (cada 30 min)
+  const generarFranjas = () => {
+    const slots = [];
+    for (let h = 8; h < 18; h++) {
+      slots.push(`${String(h).padStart(2, "0")}:00`);
+      slots.push(`${String(h).padStart(2, "0")}:30`);
+    }
+    return slots;
+  };
+  const franjas = generarFranjas();
+
+  const getCitaEnFranja = (slot) => {
+    return citasDoctor.find((c) => formatHora(c.hora) === slot);
+  };
 
   // Cargar especialidades al iniciar
   useEffect(() => {
@@ -219,13 +234,23 @@ function ModalProgramarCita({ user, onClose, onSuccess }) {
     });
   }, []);
 
-  // Cargar horarios al cambiar fecha o doctor
+  // Cargar citas del doctor para la fecha seleccionada
   useEffect(() => {
-    if (!fecha || !doctorId) { setSlots([]); return; }
+    setHoraSeleccionada("");
+    setConsultorio("");
+    if (!fecha || !doctorId) { setCitasDoctor([]); return; }
     setLoading(true);
-    axios.get(`/citas/horarios-disponibles?fecha=${fecha}&usuario_id=${doctorId}`)
-      .then((r) => { if (Array.isArray(r.data.resultado)) setSlots(r.data.resultado); })
-      .catch(() => {})
+    axios.get(`/citas/doctor/${doctorId}`)
+      .then((r) => {
+        if (Array.isArray(r.data.resultado)) {
+          setCitasDoctor(
+            r.data.resultado.filter(
+              (c) => c.fecha?.split("T")[0] === fecha && c.estado !== "Cancelada" && c.estado !== "No_Asistio"
+            )
+          );
+        }
+      })
+      .catch(() => setCitasDoctor([]))
       .finally(() => setLoading(false));
   }, [fecha, doctorId]);
 
@@ -235,9 +260,9 @@ function ModalProgramarCita({ user, onClose, onSuccess }) {
     setStep(2);
   };
 
-  const handleSelectSlot = (hora, cons) => {
+  const handleSelectSlot = (hora) => {
     setHoraSeleccionada(hora);
-    setConsultorio(cons);
+    setConsultorio("1");
     setStep(3);
   };
 
@@ -419,33 +444,55 @@ function ModalProgramarCita({ user, onClose, onSuccess }) {
               </div>
             </div>
 
-            {/* Horarios disponibles */}
+            {/* Panel de disponibilidad horaria */}
             {fecha && (
-              <div>
-                <label className="mb-1.5 block text-sm font-medium text-gray-700 dark:text-dark-200">
-                  Horarios disponibles — {dayjs(fecha).format("dddd D [de] MMMM")}
-                </label>
-                {loading ? (
-                  <p className="py-4 text-center text-sm text-gray-400">Cargando horarios...</p>
-                ) : slots.length === 0 ? (
-                  <p className="py-4 text-center text-sm text-gray-400">No hay horarios disponibles este día</p>
-                ) : (
-                  <div className="grid grid-cols-3 gap-2 sm:grid-cols-4">
-                    {slots.map((slot) => (
-                      <button
-                        key={slot.hora}
-                        onClick={() => handleSelectSlot(slot.hora, slot.consultorios_disponibles[0])}
-                        className={`rounded-xl border px-3 py-2.5 text-center text-sm font-medium transition-all ${
-                          horaSeleccionada === slot.hora
-                            ? "border-indigo-500 bg-indigo-50 text-indigo-700 dark:border-indigo-400 dark:bg-indigo-500/15 dark:text-indigo-400"
-                            : "border-gray-200 text-gray-700 hover:border-indigo-300 hover:bg-indigo-50/50 dark:border-dark-500 dark:text-dark-200 dark:hover:border-indigo-400"
-                        }`}
-                      >
-                        {slot.hora}
-                      </button>
-                    ))}
-                  </div>
-                )}
+              <div className="rounded-xl border border-gray-200 dark:border-dark-500 overflow-hidden">
+                <div className="flex items-center gap-2 bg-gray-50 px-3 py-2.5 dark:bg-dark-600">
+                  <CalendarDaysIcon className="size-4 text-indigo-600 dark:text-indigo-400" />
+                  <span className="text-xs font-semibold text-gray-700 dark:text-dark-100">
+                    Disponibilidad — {dayjs(fecha).format("dddd D [de] MMMM")}
+                  </span>
+                  <span className="ml-auto flex items-center gap-3 text-[10px]">
+                    <span className="flex items-center gap-1"><span className="inline-block size-2 rounded-full bg-indigo-500" /> Libre</span>
+                    <span className="flex items-center gap-1"><span className="inline-block size-2 rounded-full bg-red-500" /> Ocupado</span>
+                  </span>
+                </div>
+                <div className="grid grid-cols-3 sm:grid-cols-4 gap-1.5 p-3 max-h-52 overflow-y-auto">
+                  {loading ? (
+                    <p className="col-span-full py-4 text-center text-sm text-gray-400">Cargando...</p>
+                  ) : (
+                    franjas.map((slot) => {
+                      const citaOcupada = getCitaEnFranja(slot);
+                      const isSelected = horaSeleccionada === slot;
+                      if (citaOcupada) {
+                        return (
+                          <div
+                            key={slot}
+                            className="flex flex-col items-center rounded-lg bg-red-50 px-1.5 py-2 border border-red-200 dark:bg-red-500/10 dark:border-red-500/30 cursor-not-allowed"
+                          >
+                            <span className="text-xs font-bold text-red-600 dark:text-red-400">{slot}</span>
+                            <span className="text-[9px] text-red-500 dark:text-red-300">Ocupado</span>
+                          </div>
+                        );
+                      }
+                      return (
+                        <button
+                          key={slot}
+                          type="button"
+                          onClick={() => handleSelectSlot(slot)}
+                          className={`flex flex-col items-center rounded-lg px-1.5 py-2 border transition-all ${
+                            isSelected
+                              ? "border-indigo-500 bg-indigo-100 ring-2 ring-indigo-300 dark:bg-indigo-500/20 dark:ring-indigo-500/40"
+                              : "border-gray-200 bg-white hover:border-indigo-300 hover:bg-indigo-50 dark:border-dark-500 dark:bg-dark-700 dark:hover:bg-indigo-500/10"
+                          }`}
+                        >
+                          <span className={`text-xs font-bold ${isSelected ? "text-indigo-700 dark:text-indigo-300" : "text-gray-700 dark:text-dark-100"}`}>{slot}</span>
+                          <span className="text-[9px] text-indigo-500 dark:text-indigo-400">Libre</span>
+                        </button>
+                      );
+                    })
+                  )}
+                </div>
               </div>
             )}
 

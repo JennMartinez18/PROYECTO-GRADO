@@ -12,6 +12,7 @@ from routes.Historia_tratamientos_Routes import router as historia_tratamientos_
 from routes.Facturas_Routes import router as facturas_router
 from routes.Dashboard_Routes import router as dashboard_router
 from routes.Reportes_Routes import router as reportes_router
+from chatbot.chatbot_routes import router as chatbot_router
 from fastapi.middleware.cors import CORSMiddleware
 
 app = FastAPI(
@@ -56,6 +57,7 @@ app.add_middleware(
 
 # Rutas públicas
 app.include_router(auth_router, prefix="/auth", tags=["🔐 Autenticación"])
+app.include_router(chatbot_router, prefix="/chatbot", tags=["🤖 Chatbot"])
 
 # Rutas protegidas
 app.include_router(dashboard_router, prefix="/dashboard", tags=["📊 Dashboard"])

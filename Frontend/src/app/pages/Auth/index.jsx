@@ -2,6 +2,7 @@
 import { EnvelopeIcon, LockClosedIcon } from "@heroicons/react/24/outline";
 import { yupResolver } from "@hookform/resolvers/yup";
 import { useForm } from "react-hook-form";
+import { Link } from "react-router";
 
 // Local Imports
 import Logo from "assets/appLogo.svg?react";
@@ -99,7 +100,15 @@ export default function SignIn() {
               </Button>
             </form>
           </Card>
-          <div className="mt-8 flex justify-center text-xs text-gray-400 dark:text-dark-300">
+          <div className="mt-4 text-center">
+            <Link
+              to="/landing"
+              className="text-sm text-indigo-600 hover:text-indigo-700 hover:underline"
+            >
+              ← Volver al sitio web
+            </Link>
+          </div>
+          <div className="mt-4 flex justify-center text-xs text-gray-400 dark:text-dark-300">
             <span>Consultorio María Luiza Balza &copy; {new Date().getFullYear()}</span>
           </div>
         </div>

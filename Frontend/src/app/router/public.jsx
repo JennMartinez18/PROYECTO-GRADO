@@ -1,6 +1,13 @@
 const publicRoutes = {
   id: "public",
-  children: [],
+  children: [
+    {
+      path: "landing",
+      lazy: async () => ({
+        Component: (await import("app/pages/landing")).default,
+      }),
+    },
+  ],
 };
 
 export { publicRoutes };

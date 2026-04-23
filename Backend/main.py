@@ -1,5 +1,12 @@
 import uvicorn
+import logging
+from contextlib import asynccontextmanager
 from fastapi import FastAPI
+
+logging.basicConfig(
+    level=logging.INFO,
+    format="%(asctime)s [%(levelname)s] %(name)s: %(message)s",
+)
 from routes.Auth_Routes import router as auth_router
 from routes.Pacientes_Routes import router as pacientes_router
 from routes.Citas_Routes import router as citas_router
@@ -12,8 +19,19 @@ from routes.Historia_tratamientos_Routes import router as historia_tratamientos_
 from routes.Facturas_Routes import router as facturas_router
 from routes.Dashboard_Routes import router as dashboard_router
 from routes.Reportes_Routes import router as reportes_router
+from routes.Notificaciones_Routes import router as notificaciones_router
+from routes.Backup_Routes import router as backup_router
 from chatbot.chatbot_routes import router as chatbot_router
 from fastapi.middleware.cors import CORSMiddleware
+from services.scheduler import start_scheduler, stop_scheduler
+
+
+@asynccontextmanager
+async def lifespan(app: FastAPI):
+    start_scheduler()
+    yield
+    stop_scheduler()
+
 
 app = FastAPI(
     title="Sistema de Gestión Odontológico - María Luiza Balza",
@@ -32,12 +50,15 @@ app = FastAPI(
     * **Usuarios** - Administración de usuarios del sistema
     * **Roles** - Control de accesos y permisos
     * **Especialidades** - Gestión de especialidades odontológicas
+    * **Notificaciones** - Recordatorios automáticos por WhatsApp
+    * **Backup** - Copias de seguridad automáticas de la base de datos
 
     ### Autenticación
     Use el endpoint `/auth/login` para obtener su token JWT.
     Incluya el token en el header: `Authorization: Bearer <token>`
     """,
     version="1.0.0",
+    lifespan=lifespan,
 )
 
 origins = [
@@ -71,6 +92,8 @@ app.include_router(especialidades_router, tags=["⚕️ Especialidades"])
 app.include_router(usuarios_router, tags=["👥 Usuarios"])
 app.include_router(roles_router, tags=["🔑 Roles"])
 app.include_router(reportes_router, prefix="/reportes", tags=["📈 Reportes"])
+app.include_router(notificaciones_router, tags=["🔔 Notificaciones WhatsApp"])
+app.include_router(backup_router, tags=["💾 Backup"])
 
 if __name__ == "__main__":
     uvicorn.run(app, host="0.0.0.0", port=8000)

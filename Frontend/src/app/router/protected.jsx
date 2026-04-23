@@ -108,6 +108,18 @@ const protectedRoutes = {
                 Component: (await import("app/pages/admin/reportes")).default,
               }),
             },
+            {
+              path: "notificaciones",
+              lazy: async () => ({
+                Component: (await import("app/pages/admin/notificaciones")).default,
+              }),
+            },
+            {
+              path: "backup",
+              lazy: async () => ({
+                Component: (await import("app/pages/admin/backup")).default,
+              }),
+            },
           ],
         },
         // Portal del Paciente

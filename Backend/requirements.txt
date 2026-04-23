@@ -6,3 +6,5 @@ PyJWT
 python-dotenv
 pydantic
 google-generativeai
+apscheduler==3.10.3
+twilio

@@ -1,0 +1,65 @@
+{
+  "version": "0.2.0",
+  "configurations": [
+    {
+      "name": "FastAPI: Debug",
+      "type": "debugpy",
+      "request": "launch",
+      "python": "${workspaceFolder}/Backend/.venv/bin/python",
+      "module": "uvicorn",
+      "args": ["main:app", "--reload", "--port", "8000"],
+      "cwd": "${workspaceFolder}/Backend",
+      "envFile": "${workspaceFolder}/Backend/.env",
+      "env": {
+        "PYTHONPATH": "${workspaceFolder}/Backend"
+      },
+      "jinja": true,
+      "justMyCode": true,
+      "console": "internalConsole"
+    },
+    {
+      "name": "FastAPI: Debug (sin reload)",
+      "type": "debugpy",
+      "request": "launch",
+      "python": "${workspaceFolder}/Backend/.venv/bin/python",
+      "module": "uvicorn",
+      "args": ["main:app", "--port", "8000"],
+      "cwd": "${workspaceFolder}/Backend",
+      "envFile": "${workspaceFolder}/Backend/.env",
+      "env": {
+        "PYTHONPATH": "${workspaceFolder}/Backend"
+      },
+      "jinja": true,
+      "justMyCode": false,
+      "console": "internalConsole"
+    },
+    {
+      "name": "Debug: Test WhatsApp",
+      "type": "debugpy",
+      "request": "launch",
+      "python": "${workspaceFolder}/Backend/.venv/bin/python",
+      "program": "${workspaceFolder}/Backend/test_whatsapp.py",
+      "cwd": "${workspaceFolder}/Backend",
+      "envFile": "${workspaceFolder}/Backend/.env",
+      "env": {
+        "PYTHONPATH": "${workspaceFolder}/Backend"
+      },
+      "justMyCode": false,
+      "console": "internalConsole"
+    },
+    {
+      "name": "Debug: Procesar Recordatorios",
+      "type": "debugpy",
+      "request": "launch",
+      "python": "${workspaceFolder}/Backend/.venv/bin/python",
+      "program": "${workspaceFolder}/Backend/debug_notificaciones.py",
+      "cwd": "${workspaceFolder}/Backend",
+      "envFile": "${workspaceFolder}/Backend/.env",
+      "env": {
+        "PYTHONPATH": "${workspaceFolder}/Backend"
+      },
+      "justMyCode": false,
+      "console": "internalConsole"
+    }
+  ]
+}

@@ -2,6 +2,9 @@ from config.db_config import get_db_connection
 from models.Citas_Model import Cita, CambiarEstadoCita
 from fastapi.encoders import jsonable_encoder
 from datetime import datetime, timedelta
+import logging
+
+logger = logging.getLogger(__name__)
 
 
 # Horario de atención
@@ -163,7 +166,21 @@ class CitasController:
                 ),
             )
             conn.commit()
+            nueva_cita_id = cursor.lastrowid
             conn.close()
+
+            # Enviar confirmación por WhatsApp
+            logger.info(f"Cita #{nueva_cita_id} creada — enviando confirmación WhatsApp")
+            try:
+                from services.notification_service import enviar_confirmacion_cita
+                resultado_wa = enviar_confirmacion_cita(nueva_cita_id)
+                if resultado_wa.get("success"):
+                    logger.info(f"WhatsApp enviado OK — SID: {resultado_wa.get('message_id')}")
+                else:
+                    logger.warning(f"WhatsApp falló: {resultado_wa.get('error')}")
+            except Exception as e:
+                logger.error(f"Excepción al enviar WhatsApp: {e}")
+
             return {"informacion": "Cita registrada exitosamente"}
         except Exception as error:
             return {"resultado": str(error)}

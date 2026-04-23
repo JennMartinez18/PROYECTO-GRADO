@@ -1,5 +1,6 @@
 from apscheduler.schedulers.asyncio import AsyncIOScheduler
 from apscheduler.triggers.cron import CronTrigger
+from apscheduler.triggers.interval import IntervalTrigger
 import logging
 
 logger = logging.getLogger(__name__)
@@ -13,13 +14,13 @@ def start_scheduler():
     from services.notification_service import procesar_recordatorios
     from services.backup_service import crear_backup
 
-    # HU-02: Recordatorios WhatsApp — diariamente a las 8:00 AM
+    # HU-02: Recordatorios WhatsApp — cada 5 minutos (deduplicación en BD)
     scheduler.add_job(
         procesar_recordatorios,
-        CronTrigger(hour=10, minute=6),
+        IntervalTrigger(minutes=5),
         id="recordatorios_whatsapp",
         replace_existing=True,
-        misfire_grace_time=3600,
+        misfire_grace_time=300,
     )
 
     # HU-06: Backup automático — diariamente a las 2:00 AM

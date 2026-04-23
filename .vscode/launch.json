@@ -15,7 +15,7 @@
       },
       "jinja": true,
       "justMyCode": true,
-      "console": "internalConsole"
+      "console": "integratedTerminal"
     },
     {
       "name": "FastAPI: Debug (sin reload)",
@@ -31,7 +31,7 @@
       },
       "jinja": true,
       "justMyCode": false,
-      "console": "internalConsole"
+      "console": "integratedTerminal"
     },
     {
       "name": "Debug: Test WhatsApp",
@@ -45,7 +45,7 @@
         "PYTHONPATH": "${workspaceFolder}/Backend"
       },
       "justMyCode": false,
-      "console": "internalConsole"
+      "console": "integratedTerminal"
     },
     {
       "name": "Debug: Procesar Recordatorios",
@@ -59,7 +59,7 @@
         "PYTHONPATH": "${workspaceFolder}/Backend"
       },
       "justMyCode": false,
-      "console": "internalConsole"
+      "console": "integratedTerminal"
     }
   ]
 }

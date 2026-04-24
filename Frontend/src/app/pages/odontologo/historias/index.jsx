@@ -31,7 +31,6 @@ const emptyForm = {
   diagnostico: "",
   observaciones: "",
   recomendaciones: "",
-  proxima_cita: "",
 };
 
 export default function OdontologoHistorias() {
@@ -158,7 +157,6 @@ export default function OdontologoHistorias() {
       diagnostico: h.diagnostico || "",
       observaciones: h.observaciones || "",
       recomendaciones: h.recomendaciones || "",
-      proxima_cita: h.proxima_cita?.split("T")[0] || "",
     });
     setEditId(h.id);
     setShowModal(true);
@@ -340,15 +338,6 @@ export default function OdontologoHistorias() {
                     value={form.recomendaciones}
                     onChange={(e) => setForm({ ...form, recomendaciones: e.target.value })}
                     rows={2}
-                    className="w-full rounded-xl border border-gray-200 bg-gray-50 px-4 py-2.5 text-sm dark:border-dark-500 dark:bg-dark-600 dark:text-dark-100"
-                  />
-                </div>
-                <div>
-                  <label className="mb-1 block text-sm font-medium text-gray-700 dark:text-dark-200">Próxima Cita</label>
-                  <input
-                    type="date"
-                    value={form.proxima_cita}
-                    onChange={(e) => setForm({ ...form, proxima_cita: e.target.value })}
                     className="w-full rounded-xl border border-gray-200 bg-gray-50 px-4 py-2.5 text-sm dark:border-dark-500 dark:bg-dark-600 dark:text-dark-100"
                   />
                 </div>

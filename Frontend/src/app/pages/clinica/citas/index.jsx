@@ -1,5 +1,6 @@
 ﻿import { useEffect, useState, useCallback, useMemo } from "react";
 import { Page } from "components/shared/Page";
+import { ConfirmModal } from "components/shared/ConfirmModal";
 import { Button, Card, Input, Table, THead, TBody, Tr, Th, Td } from "components/ui";
 import {
   PlusIcon,
@@ -36,7 +37,7 @@ const emptyForm = {
   estado: "Programada",
   observaciones: "",
   motivo_consulta: "",
-  consultorio: "",
+  consultorio: "1",
 };
 
 export default function Citas() {
@@ -50,6 +51,9 @@ export default function Citas() {
   const [form, setForm] = useState(emptyForm);
   const [editId, setEditId] = useState(null);
   const [citasDoctor, setCitasDoctor] = useState([]);
+  const [confirmOpen, setConfirmOpen] = useState(false);
+  const [confirmLoading, setConfirmLoading] = useState(false);
+  const [pendingDeleteId, setPendingDeleteId] = useState(null);
 
   const fetchAll = useCallback(async () => {
     try {
@@ -109,8 +113,25 @@ export default function Citas() {
     return citasDoctor.find((c) => formatHora(c.hora) === slot);
   };
 
+  // Fecha y hora mínimas permitidas (en zona horaria local, no UTC)
+  const hoy = new Date().toLocaleDateString("en-CA");
+  const horaActual = new Date().toLocaleTimeString("en-GB", { hour: "2-digit", minute: "2-digit" });
+  const slotEsPasado = (slot) => form.fecha === hoy && slot < horaActual;
+
   const handleSubmit = async (e) => {
     e.preventDefault();
+    // Validar fecha y hora no pasadas (solo al crear)
+    if (!editId) {
+      if (form.fecha < hoy) {
+        toast.error("No se pueden crear citas en fechas pasadas");
+        return;
+      }
+      if (form.fecha === hoy && form.hora && form.hora.slice(0, 5) < horaActual) {
+        toast.error("No se pueden crear citas en horas que ya pasaron");
+        return;
+      }
+    }
+
     const payload = {
       ...form,
       paciente_id: parseInt(form.paciente_id),
@@ -146,21 +167,30 @@ export default function Citas() {
       estado: c.estado || "Programada",
       observaciones: c.observaciones || "",
       motivo_consulta: c.motivo_consulta || "",
-      consultorio: c.consultorio || "",
+      consultorio: c.consultorio || "1",
     });
     setEditId(c.id);
     setShowModal(true);
   };
 
-  const handleDelete = async (id) => {
-    if (!window.confirm("¿Eliminar esta cita?")) return;
+  const handleDelete = (id) => {
+    setPendingDeleteId(id);
+    setConfirmOpen(true);
+  };
+
+  const doDelete = async () => {
+    setConfirmLoading(true);
     try {
-      const res = await axios.delete(`/citas/${id}`);
+      const res = await axios.delete(`/citas/${pendingDeleteId}`);
       if (res.data.resultado && typeof res.data.resultado === "string") { toast.error(res.data.resultado); return; }
       toast.success(res.data.informacion || "Cita eliminada");
       fetchAll();
     } catch {
       toast.error("Error al eliminar");
+    } finally {
+      setConfirmLoading(false);
+      setConfirmOpen(false);
+      setPendingDeleteId(null);
     }
   };
 
@@ -409,7 +439,7 @@ export default function Citas() {
                   </select>
                 </div>
                 <div>
-                  <Input label="Fecha" type="date" value={form.fecha} onChange={(e) => setForm({ ...form, fecha: e.target.value })} />
+                  <Input label="Fecha" type="date" value={form.fecha} min={!editId ? hoy : undefined} onChange={(e) => setForm({ ...form, fecha: e.target.value })} />
                 </div>
                 {form.hora && (
                   <div className="flex items-center gap-2 rounded-lg bg-emerald-50 px-3 py-2 dark:bg-emerald-500/10">
@@ -435,6 +465,7 @@ export default function Citas() {
                       {franjas.map((slot) => {
                         const citaOcupada = getCitaEnFranja(slot);
                         const isSelected = form.hora?.slice(0, 5) === slot;
+                        const isPasado = !editId && slotEsPasado(slot);
                         if (citaOcupada) {
                           return (
                             <div
@@ -449,6 +480,18 @@ export default function Citas() {
                                   {citaOcupada.paciente_nombre} {citaOcupada.paciente_apellido?.charAt(0)}.
                                 </span>
                               </div>
+                            </div>
+                          );
+                        }
+                        if (isPasado) {
+                          return (
+                            <div
+                              key={slot}
+                              className="flex flex-col items-center rounded-lg bg-gray-100 px-1.5 py-2 border border-gray-200 dark:bg-dark-600 dark:border-dark-500 cursor-not-allowed opacity-50"
+                              title="Hora pasada"
+                            >
+                              <span className="text-xs font-bold text-gray-400 dark:text-dark-400">{slot}</span>
+                              <span className="text-[9px] text-gray-400 dark:text-dark-500">Pasado</span>
                             </div>
                           );
                         }
@@ -472,7 +515,6 @@ export default function Citas() {
                   </div>
                 )}
 
-                <Input label="Consultorio" value={form.consultorio} onChange={(e) => setForm({ ...form, consultorio: e.target.value })} />
                 <Input label="Motivo de Consulta" value={form.motivo_consulta} onChange={(e) => setForm({ ...form, motivo_consulta: e.target.value })} />
                 <Input label="Observaciones" value={form.observaciones} onChange={(e) => setForm({ ...form, observaciones: e.target.value })} />
                 {editId && (
@@ -497,6 +539,20 @@ export default function Citas() {
           </div>
         )}
       </div>
+      <ConfirmModal
+        show={confirmOpen}
+        onClose={() => { setConfirmOpen(false); setPendingDeleteId(null); }}
+        onOk={doDelete}
+        confirmLoading={confirmLoading}
+        state="pending"
+        messages={{
+          pending: {
+            title: "¿Eliminar esta cita?",
+            description: "Esta acción no se puede deshacer.",
+            actionText: "Eliminar",
+          },
+        }}
+      />
     </Page>
   );
 }

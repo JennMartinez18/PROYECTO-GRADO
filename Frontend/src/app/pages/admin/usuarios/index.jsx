@@ -1,5 +1,6 @@
 ﻿import { useEffect, useState, useCallback, useMemo } from "react";
 import { Page } from "components/shared/Page";
+import { ConfirmModal } from "components/shared/ConfirmModal";
 import { Button, Card, Input, Table, THead, TBody, Tr, Th, Td } from "components/ui";
 import {
   PlusIcon,
@@ -40,6 +41,9 @@ export default function Usuarios() {
   const [showModal, setShowModal] = useState(false);
   const [form, setForm] = useState(emptyForm);
   const [editId, setEditId] = useState(null);
+  const [confirmOpen, setConfirmOpen] = useState(false);
+  const [confirmLoading, setConfirmLoading] = useState(false);
+  const [pendingDeleteId, setPendingDeleteId] = useState(null);
 
   const fetchAll = useCallback(async () => {
     try {
@@ -99,15 +103,24 @@ export default function Usuarios() {
     setShowModal(true);
   };
 
-  const handleDelete = async (id) => {
-    if (!window.confirm("¿Eliminar este usuario?")) return;
+  const handleDelete = (id) => {
+    setPendingDeleteId(id);
+    setConfirmOpen(true);
+  };
+
+  const doDelete = async () => {
+    setConfirmLoading(true);
     try {
-      const res = await axios.delete(`/usuarios/${id}`);
+      const res = await axios.delete(`/usuarios/${pendingDeleteId}`);
       if (res.data.resultado && typeof res.data.resultado === "string") { toast.error(res.data.resultado); return; }
       toast.success(res.data.informacion || "Usuario eliminado");
       fetchAll();
     } catch {
       toast.error("Error al eliminar");
+    } finally {
+      setConfirmLoading(false);
+      setConfirmOpen(false);
+      setPendingDeleteId(null);
     }
   };
 
@@ -328,6 +341,20 @@ export default function Usuarios() {
           </div>
         )}
       </div>
+      <ConfirmModal
+        show={confirmOpen}
+        onClose={() => { setConfirmOpen(false); setPendingDeleteId(null); }}
+        onOk={doDelete}
+        confirmLoading={confirmLoading}
+        state="pending"
+        messages={{
+          pending: {
+            title: "¿Eliminar usuario?",
+            description: "Esta acción no se puede deshacer.",
+            actionText: "Eliminar",
+          },
+        }}
+      />
     </Page>
   );
 }

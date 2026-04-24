@@ -74,7 +74,7 @@ class HistoriasClinicasController:
                 (
                     historia.paciente_id, historia.cita_id, historia.usuario_id,
                     historia.fecha_atencion, historia.motivo_consulta, historia.diagnostico,
-                    historia.observaciones, historia.recomendaciones, historia.proxima_cita,
+                    historia.observaciones, historia.recomendaciones, historia.proxima_cita or None,
                 ),
             )
             conn.commit()
@@ -99,7 +99,7 @@ class HistoriasClinicasController:
                 (
                     historia.paciente_id, historia.cita_id, historia.usuario_id,
                     historia.fecha_atencion, historia.motivo_consulta, historia.diagnostico,
-                    historia.observaciones, historia.recomendaciones, historia.proxima_cita, id,
+                    historia.observaciones, historia.recomendaciones, historia.proxima_cita or None, id,
                 ),
             )
             conn.commit()

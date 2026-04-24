@@ -110,7 +110,7 @@ export default function LandingPage() {
               </svg>
             </div>
             <span className="text-lg font-bold text-gray-900">
-              Dra. María Luiza Balza
+              María Luiza Balza
             </span>
           </div>
           <div className="hidden items-center gap-8 md:flex">
@@ -307,7 +307,7 @@ export default function LandingPage() {
                   <div>
                     <p className="text-sm font-medium text-gray-900">Teléfono</p>
                     <p className="text-sm text-gray-600">
-                      Llámanos para consultas y agendar tu primera cita
+                      3043032276 - 3012345678
                     </p>
                   </div>
                 </div>
@@ -322,7 +322,7 @@ export default function LandingPage() {
                       Correo Electrónico
                     </p>
                     <p className="text-sm text-gray-600">
-                      Escríbenos para información general y consultas
+                      Marialuiza@gmail.com
                     </p>
                   </div>
                 </div>

@@ -1,6 +1,7 @@
 import { useEffect, useState, useCallback } from "react";
 import { Page } from "components/shared/Page";
 import { Card } from "components/ui";
+import { ConfirmModal } from "components/shared/ConfirmModal";
 import { formatHora } from "utils/formatHora";
 import {
   CalendarDaysIcon,
@@ -24,6 +25,9 @@ export default function MisCitas() {
   const [citas, setCitas] = useState([]);
   const [filtro, setFiltro] = useState("todas");
   const [showModal, setShowModal] = useState(false);
+  const [confirmOpen, setConfirmOpen] = useState(false);
+  const [confirmLoading, setConfirmLoading] = useState(false);
+  const [pendingCancelId, setPendingCancelId] = useState(null);
 
   const fetchCitas = useCallback(async () => {
     if (!user?.paciente_id) return;
@@ -39,15 +43,24 @@ export default function MisCitas() {
     fetchCitas();
   }, [fetchCitas]);
 
-  const handleCancelar = async (citaId) => {
-    if (!window.confirm("¿Estás seguro de cancelar esta cita?")) return;
+  const handleCancelar = (citaId) => {
+    setPendingCancelId(citaId);
+    setConfirmOpen(true);
+  };
+
+  const doCancelar = async () => {
+    setConfirmLoading(true);
     try {
-      const res = await axios.patch(`/citas/${citaId}/estado`, { estado: "Cancelada" });
+      const res = await axios.patch(`/citas/${pendingCancelId}/estado`, { estado: "Cancelada" });
       if (res.data.resultado && typeof res.data.resultado === "string") { toast.error(res.data.resultado); return; }
       toast.success("Cita cancelada exitosamente");
       fetchCitas();
     } catch {
       toast.error("Error al cancelar la cita");
+    } finally {
+      setConfirmLoading(false);
+      setConfirmOpen(false);
+      setPendingCancelId(null);
     }
   };
 
@@ -176,6 +189,21 @@ export default function MisCitas() {
           onSuccess={() => { setShowModal(false); fetchCitas(); }}
         />
       )}
+
+      <ConfirmModal
+        show={confirmOpen}
+        onClose={() => { setConfirmOpen(false); setPendingCancelId(null); }}
+        onOk={doCancelar}
+        confirmLoading={confirmLoading}
+        state="pending"
+        messages={{
+          pending: {
+            title: "¿Cancelar esta cita?",
+            description: "Esta acción no se puede deshacer. La cita quedará marcada como cancelada.",
+            actionText: "Sí, cancelar",
+          },
+        }}
+      />
     </Page>
   );
 }
@@ -196,7 +224,7 @@ function ModalProgramarCita({ user, onClose, onSuccess }) {
   const [doctorNombre, setDoctorNombre] = useState("");
   const [fecha, setFecha] = useState("");
   const [horaSeleccionada, setHoraSeleccionada] = useState("");
-  const [consultorio, setConsultorio] = useState("");
+  const [consultorio, setConsultorio] = useState("1");
   const [motivo, setMotivo] = useState("");
   const [observaciones, setObservaciones] = useState("");
 
@@ -298,6 +326,7 @@ function ModalProgramarCita({ user, onClose, onSuccess }) {
 
   // Helpers calendario
   const today = dayjs();
+  const horaActual = dayjs().format("HH:mm");
   const startOfMonth = calMonth.startOf("month");
   const startDay = startOfMonth.day(); // 0=dom
   const daysInMonth = calMonth.daysInMonth();
@@ -428,7 +457,7 @@ function ModalProgramarCita({ user, onClose, onSuccess }) {
                     <button
                       key={i}
                       disabled={disabled}
-                      onClick={() => { setFecha(d.format("YYYY-MM-DD")); setHoraSeleccionada(""); setConsultorio(""); }}
+                      onClick={() => { setFecha(d.format("YYYY-MM-DD")); setHoraSeleccionada(""); setConsultorio("1"); }}
                       className={`rounded-lg py-1.5 text-xs font-medium transition-all ${
                         isSelected
                           ? "bg-indigo-600 text-white shadow-md"
@@ -464,6 +493,7 @@ function ModalProgramarCita({ user, onClose, onSuccess }) {
                     franjas.map((slot) => {
                       const citaOcupada = getCitaEnFranja(slot);
                       const isSelected = horaSeleccionada === slot;
+                      const isPasado = fecha === today.format("YYYY-MM-DD") && slot < horaActual;
                       if (citaOcupada) {
                         return (
                           <div
@@ -474,8 +504,17 @@ function ModalProgramarCita({ user, onClose, onSuccess }) {
                             <span className="text-[9px] text-red-500 dark:text-red-300">Ocupado</span>
                           </div>
                         );
-                      }
-                      return (
+                      }                      if (isPasado) {
+                        return (
+                          <div
+                            key={slot}
+                            className="flex flex-col items-center rounded-lg bg-gray-100 px-1.5 py-2 border border-gray-200 dark:bg-dark-600 dark:border-dark-500 cursor-not-allowed opacity-50"
+                          >
+                            <span className="text-xs font-bold text-gray-400 dark:text-dark-400">{slot}</span>
+                            <span className="text-[9px] text-gray-400">Pasado</span>
+                          </div>
+                        );
+                      }                      return (
                         <button
                           key={slot}
                           type="button"

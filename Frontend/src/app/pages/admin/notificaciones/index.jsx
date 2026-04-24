@@ -1,6 +1,7 @@
 import { useEffect, useState, useCallback } from "react";
 import { Page } from "components/shared/Page";
 import { Card } from "components/ui";
+import { ConfirmModal } from "components/shared/ConfirmModal";
 import {
   BellIcon,
   CheckCircleIcon,
@@ -48,6 +49,7 @@ export default function Notificaciones() {
   const [loading, setLoading] = useState(true);
   const [ejecutando, setEjecutando] = useState(false);
   const [filtro, setFiltro]   = useState("todos");
+  const [confirmOpen, setConfirmOpen] = useState(false);
 
   const fetchData = useCallback(async () => {
     setLoading(true);
@@ -67,8 +69,11 @@ export default function Notificaciones() {
 
   useEffect(() => { fetchData(); }, [fetchData]);
 
-  const handleEjecutar = async () => {
-    if (!window.confirm("¿Deseas ejecutar el proceso de recordatorios ahora?")) return;
+  const handleEjecutar = () => {
+    setConfirmOpen(true);
+  };
+
+  const doEjecutar = async () => {
     setEjecutando(true);
     try {
       const res = await axios.post("/notificaciones/ejecutar");
@@ -82,6 +87,7 @@ export default function Notificaciones() {
       toast.error("Error al ejecutar recordatorios");
     } finally {
       setEjecutando(false);
+      setConfirmOpen(false);
     }
   };
 
@@ -221,6 +227,20 @@ export default function Notificaciones() {
           )}
         </Card>
       </div>
+      <ConfirmModal
+        show={confirmOpen}
+        onClose={() => setConfirmOpen(false)}
+        onOk={doEjecutar}
+        confirmLoading={ejecutando}
+        state="pending"
+        messages={{
+          pending: {
+            title: "¿Ejecutar recordatorios ahora?",
+            description: "Se enviarán recordatorios WhatsApp a todos los pacientes con citas en las próximas 24 horas que aún no hayan sido notificados.",
+            actionText: "Ejecutar",
+          },
+        }}
+      />
     </Page>
   );
 }

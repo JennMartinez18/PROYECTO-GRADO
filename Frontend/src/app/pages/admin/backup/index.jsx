@@ -1,6 +1,7 @@
 import { useEffect, useState, useCallback } from "react";
 import { Page } from "components/shared/Page";
 import { Card } from "components/ui";
+import { ConfirmModal } from "components/shared/ConfirmModal";
 import {
   CircleStackIcon,
   CheckCircleIcon,
@@ -44,6 +45,9 @@ export default function Backup() {
   const [loading, setLoading]     = useState(true);
   const [creando, setCreando]     = useState(false);
   const [eliminando, setEliminando] = useState(null);
+  const [confirmOpen, setConfirmOpen] = useState(false);
+  const [confirmLoading, setConfirmLoading] = useState(false);
+  const [confirmConfig, setConfirmConfig] = useState({ title: "", description: "", actionText: "", onOk: null });
 
   const fetchBackups = useCallback(async () => {
     setLoading(true);
@@ -59,22 +63,32 @@ export default function Backup() {
 
   useEffect(() => { fetchBackups(); }, [fetchBackups]);
 
-  const handleCrearBackup = async () => {
-    if (!window.confirm("¿Deseas generar un backup de la base de datos ahora?")) return;
-    setCreando(true);
-    try {
-      const res = await axios.post("/backup");
-      if (res.data.success) {
-        toast.success(`Backup creado: ${res.data.nombre} (${formatBytes(res.data.tamanio)})`);
-        fetchBackups();
-      } else {
-        toast.error(`Error al crear backup: ${res.data.error}`);
-      }
-    } catch {
-      toast.error("Error al crear el backup");
-    } finally {
-      setCreando(false);
-    }
+  const handleCrearBackup = () => {
+    setConfirmConfig({
+      title: "¿Generar backup ahora?",
+      description: "Se creará un respaldo completo de la base de datos en este momento.",
+      actionText: "Generar",
+      onOk: async () => {
+        setConfirmLoading(true);
+        setCreando(true);
+        try {
+          const res = await axios.post("/backup");
+          if (res.data.success) {
+            toast.success(`Backup creado: ${res.data.nombre} (${formatBytes(res.data.tamanio)})`);
+            fetchBackups();
+          } else {
+            toast.error(`Error al crear backup: ${res.data.error}`);
+          }
+        } catch {
+          toast.error("Error al crear el backup");
+        } finally {
+          setCreando(false);
+          setConfirmLoading(false);
+          setConfirmOpen(false);
+        }
+      },
+    });
+    setConfirmOpen(true);
   };
 
   const handleDescargar = (nombre) => {
@@ -96,18 +110,28 @@ export default function Backup() {
       .catch(() => toast.error("Error al descargar el backup"));
   };
 
-  const handleEliminar = async (nombre) => {
-    if (!window.confirm(`¿Eliminar el backup "${nombre}"? Esta acción no se puede deshacer.`)) return;
-    setEliminando(nombre);
-    try {
-      await axios.delete(`/backup/${nombre}`);
-      toast.success("Backup eliminado");
-      fetchBackups();
-    } catch {
-      toast.error("Error al eliminar el backup");
-    } finally {
-      setEliminando(null);
-    }
+  const handleEliminar = (nombre) => {
+    setConfirmConfig({
+      title: `¿Eliminar backup?`,
+      description: `Se eliminará permanentemente "${nombre}". Esta acción no se puede deshacer.`,
+      actionText: "Eliminar",
+      onOk: async () => {
+        setConfirmLoading(true);
+        setEliminando(nombre);
+        try {
+          await axios.delete(`/backup/${nombre}`);
+          toast.success("Backup eliminado");
+          fetchBackups();
+        } catch {
+          toast.error("Error al eliminar el backup");
+        } finally {
+          setEliminando(null);
+          setConfirmLoading(false);
+          setConfirmOpen(false);
+        }
+      },
+    });
+    setConfirmOpen(true);
   };
 
   const exitosos = backups.filter((b) => b.estado === "exitoso").length;
@@ -274,6 +298,20 @@ export default function Backup() {
           )}
         </Card>
       </div>
+      <ConfirmModal
+        show={confirmOpen}
+        onClose={() => setConfirmOpen(false)}
+        onOk={confirmConfig.onOk}
+        confirmLoading={confirmLoading}
+        state="pending"
+        messages={{
+          pending: {
+            title: confirmConfig.title,
+            description: confirmConfig.description,
+            actionText: confirmConfig.actionText,
+          },
+        }}
+      />
     </Page>
   );
 }

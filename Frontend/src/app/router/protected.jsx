@@ -109,12 +109,6 @@ const protectedRoutes = {
               }),
             },
             {
-              path: "notificaciones",
-              lazy: async () => ({
-                Component: (await import("app/pages/admin/notificaciones")).default,
-              }),
-            },
-            {
               path: "backup",
               lazy: async () => ({
                 Component: (await import("app/pages/admin/backup")).default,

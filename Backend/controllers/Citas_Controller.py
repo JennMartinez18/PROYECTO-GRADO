@@ -107,7 +107,8 @@ class CitasController:
             cursor.execute(
                 "SELECT c.*, p.nombre as paciente_nombre, p.apellido as paciente_apellido, "
                 "u.nombre as doctor_nombre, u.apellido as doctor_apellido, "
-                "e.nombre as especialidad_nombre "
+                "e.nombre as especialidad_nombre, "
+                "EXISTS(SELECT 1 FROM historias_clinicas hc WHERE hc.cita_id = c.id) AS tiene_historia "
                 "FROM citas c "
                 "JOIN pacientes p ON c.paciente_id = p.id "
                 "JOIN usuarios u ON c.usuario_id = u.id "
@@ -169,17 +170,53 @@ class CitasController:
             nueva_cita_id = cursor.lastrowid
             conn.close()
 
-            # Enviar confirmación por WhatsApp
-            logger.info(f"Cita #{nueva_cita_id} creada — enviando confirmación WhatsApp")
+            # Enviar confirmación por WhatsApp y Telegram
+            logger.info(f"Cita #{nueva_cita_id} creada — enviando confirmación")
             try:
                 from services.notification_service import enviar_confirmacion_cita
-                resultado_wa = enviar_confirmacion_cita(nueva_cita_id)
-                if resultado_wa.get("success"):
-                    logger.info(f"WhatsApp enviado OK — SID: {resultado_wa.get('message_id')}")
+                resultado = enviar_confirmacion_cita(nueva_cita_id)
+                wa = resultado.get("whatsapp", {})
+                tg = resultado.get("telegram", {})
+                if wa.get("success"):
+                    logger.info(f"WhatsApp enviado OK — SID: {wa.get('message_id')}")
                 else:
-                    logger.warning(f"WhatsApp falló: {resultado_wa.get('error')}")
+                    logger.warning(f"WhatsApp falló: {wa.get('error')}")
+                if tg.get("success"):
+                    logger.info(f"Telegram enviado OK — ID: {tg.get('message_id')}")
+                else:
+                    logger.info(f"Telegram no enviado: {tg.get('error')}")
             except Exception as e:
-                logger.error(f"Excepción al enviar WhatsApp: {e}")
+                logger.error(f"Excepción al enviar notificaciones: {e}")
+
+            # Crear evento en Google Calendar y enviar invitación al paciente
+            try:
+                conn2 = get_db_connection()
+                cursor2 = conn2.cursor(dictionary=True)
+                cursor2.execute(
+                    "SELECT c.fecha, c.hora, c.consultorio, c.motivo_consulta, "
+                    "p.nombre AS paciente_nombre, p.apellido AS paciente_apellido, p.email AS paciente_email, "
+                    "u.nombre AS doctor_nombre, u.apellido AS doctor_apellido, "
+                    "e.nombre AS especialidad_nombre "
+                    "FROM citas c "
+                    "JOIN pacientes p ON c.paciente_id = p.id "
+                    "JOIN usuarios u ON c.usuario_id = u.id "
+                    "JOIN especialidades e ON c.especialidad_id = e.id "
+                    "WHERE c.id = %s",
+                    (nueva_cita_id,),
+                )
+                cita_data = cursor2.fetchone()
+                conn2.close()
+                if cita_data and cita_data.get("paciente_email"):
+                    from services.google_calendar_service import crear_evento_cita
+                    gc_result = crear_evento_cita(cita_data)
+                    if gc_result.get("success"):
+                        logger.info(f"Google Calendar OK — event: {gc_result.get('event_id')}")
+                    else:
+                        logger.warning(f"Google Calendar falló: {gc_result.get('error')}")
+                else:
+                    logger.info("Paciente sin email registrado — se omite Google Calendar")
+            except Exception as e:
+                logger.error(f"Excepción al crear evento en Google Calendar: {e}")
 
             return {"informacion": "Cita registrada exitosamente"}
         except Exception as error:
@@ -338,7 +375,8 @@ class CitasController:
             cursor.execute(
                 "SELECT c.*, p.nombre AS paciente_nombre, p.apellido AS paciente_apellido, "
                 "u.nombre AS doctor_nombre, u.apellido AS doctor_apellido, "
-                "e.nombre AS especialidad_nombre "
+                "e.nombre AS especialidad_nombre, "
+                "EXISTS(SELECT 1 FROM historias_clinicas hc WHERE hc.cita_id = c.id) AS tiene_historia "
                 "FROM citas c "
                 "JOIN pacientes p ON c.paciente_id = p.id "
                 "JOIN usuarios u ON c.usuario_id = u.id "

@@ -8,3 +8,6 @@ pydantic
 google-generativeai
 apscheduler==3.10.3
 twilio
+requests
+google-api-python-client
+google-auth

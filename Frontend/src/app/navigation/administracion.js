@@ -4,7 +4,6 @@ import {
     UsersIcon,
     ShieldCheckIcon,
     ChartBarIcon,
-    BellIcon,
     CircleStackIcon,
 } from '@heroicons/react/24/outline';
 import SettingIcon from 'assets/dualicons/setting.svg?react';
@@ -57,14 +56,6 @@ export const administracion = {
             title: 'Reportes',
             transKey: 'Gestión Reportes',
             Icon: ChartBarIcon,
-        },
-        {
-            id: 'admin.notificaciones',
-            path: '/admin/notificaciones',
-            type: NAV_TYPE_ITEM,
-            title: 'Notificaciones',
-            transKey: 'Notificaciones WhatsApp',
-            Icon: BellIcon,
         },
         {
             id: 'admin.backup',

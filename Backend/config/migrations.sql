@@ -16,6 +16,18 @@ CREATE TABLE IF NOT EXISTS notificaciones_recordatorio (
     FOREIGN KEY (cita_id) REFERENCES citas(id) ON DELETE CASCADE
 );
 
+-- ============================================================
+-- MIGRACIÓN: Soporte Telegram (HU-Telegram)
+-- ============================================================
+
+-- Columna para vincular pacientes con su Telegram
+ALTER TABLE pacientes
+    ADD COLUMN IF NOT EXISTS telegram_chat_id BIGINT NULL;
+
+-- Columna de canal en el historial de notificaciones
+ALTER TABLE notificaciones_recordatorio
+    ADD COLUMN IF NOT EXISTS canal ENUM('whatsapp', 'telegram') NOT NULL DEFAULT 'whatsapp';
+
 -- Tabla de historial de backups (HU-06)
 CREATE TABLE IF NOT EXISTS backups_historial (
     id              INT AUTO_INCREMENT PRIMARY KEY,

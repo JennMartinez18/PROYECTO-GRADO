@@ -324,7 +324,6 @@ export default function Historias() {
                 <Input label="Diagnostico" value={form.diagnostico} onChange={(e) => setForm({ ...form, diagnostico: e.target.value })} />
                 <Input label="Observaciones" value={form.observaciones} onChange={(e) => setForm({ ...form, observaciones: e.target.value })} />
                 <Input label="Recomendaciones" value={form.recomendaciones} onChange={(e) => setForm({ ...form, recomendaciones: e.target.value })} />
-                <Input label="Proxima Cita" type="date" value={form.proxima_cita} onChange={(e) => setForm({ ...form, proxima_cita: e.target.value })} />
                 <div className="flex justify-end gap-3 pt-2">
                   <Button variant="outlined" className="rounded-xl" onClick={() => setShowModal(false)}>Cancelar</Button>
                   <Button type="submit" color="primary" className="rounded-xl">{editId ? "Actualizar" : "Guardar"}</Button>

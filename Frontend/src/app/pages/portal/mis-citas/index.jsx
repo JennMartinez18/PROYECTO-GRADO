@@ -20,6 +20,46 @@ import dayjs from "dayjs";
 import "dayjs/locale/es";
 dayjs.locale("es");
 
+/** Genera la URL de "Agregar a Google Calendar" sin conversiones de zona horaria */
+function buildGoogleCalendarUrl({ fecha, hora, doctorNombre, especialidad, motivo, consultorio }) {
+  // hora puede llegar como número de segundos (timedelta) o string "HH:MM:SS"
+  let horaStr;
+  if (typeof hora === "number") {
+    const h = Math.floor(hora / 3600);
+    const m = Math.floor((hora % 3600) / 60);
+    horaStr = `${String(h).padStart(2, "0")}:${String(m).padStart(2, "0")}`;
+  } else {
+    horaStr = String(hora ?? "").slice(0, 5); // "HH:MM"
+  }
+
+  // fecha puede llegar como "YYYY-MM-DD" o "YYYY-MM-DDT..."
+  const fechaStr = String(fecha ?? "").replace(/T.*/, "").replace(/ .*/, "");
+
+  const [yr, mo, dy] = fechaStr.split("-");
+  const [hh, mm]     = horaStr.split(":");
+
+  // Formato requerido por Google Calendar: YYYYMMDDTHHMMSS
+  const startFmt = `${yr}${mo}${dy}T${hh}${mm}00`;
+
+  // +30 minutos manualmente
+  let endH = parseInt(hh, 10);
+  let endM = parseInt(mm, 10) + 30;
+  if (endM >= 60) { endH += 1; endM -= 60; }
+  const endFmt = `${yr}${mo}${dy}T${String(endH).padStart(2, "0")}${String(endM).padStart(2, "0")}00`;
+
+  const params = new URLSearchParams({
+    action:   "TEMPLATE",
+    text:     `Cita Médica – ${especialidad || "Consulta"}`,
+    dates:    `${startFmt}/${endFmt}`,
+    details:  `Doctor: Dr./Dra. ${doctorNombre}\nEspecialidad: ${especialidad || ""}\nMotivo: ${motivo || ""}\nConsultorio: ${consultorio}`,
+    location: `Consultorio ${consultorio}`,
+    ctz:      "America/Bogota",
+    sf:       "true",
+    output:   "xml",
+  });
+  return `https://calendar.google.com/calendar/render?${params.toString()}`;
+}
+
 export default function MisCitas() {
   const { user } = useAuthContext();
   const [citas, setCitas] = useState([]);
@@ -159,7 +199,29 @@ export default function MisCitas() {
                     </span>
                   </div>
                   {(cita.estado === "Programada" || cita.estado === "Confirmada") && (
-                    <div className="mt-3 flex justify-end">
+                    <div className="mt-3 flex flex-wrap justify-end gap-2">
+                      <a
+                        href={buildGoogleCalendarUrl({
+                          fecha: cita.fecha?.split("T")[0],
+                          hora: cita.hora,
+                          doctorNombre: `${cita.doctor_nombre || ""} ${cita.doctor_apellido || ""}`.trim(),
+                          especialidad: cita.especialidad_nombre,
+                          motivo: cita.motivo_consulta,
+                          consultorio: cita.consultorio,
+                        })}
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        className="inline-flex items-center gap-1.5 rounded-lg border border-gray-200 bg-white px-3 py-1.5 text-xs font-medium text-gray-600 transition-colors hover:bg-gray-50 dark:border-dark-500 dark:bg-dark-600 dark:text-dark-200 dark:hover:bg-dark-500"
+                      >
+                        <svg className="size-3.5" viewBox="0 0 48 48" fill="none" xmlns="http://www.w3.org/2000/svg">
+                          <rect x="6" y="6" width="36" height="36" rx="4" fill="#fff" stroke="#dadce0" strokeWidth="2"/>
+                          <rect x="13.5" y="13.5" width="21" height="21" fill="#1a73e8"/>
+                          <circle cx="24" cy="24" r="4" fill="#fff"/>
+                          <rect x="14" y="6" width="4" height="8" rx="2" fill="#ea4335"/>
+                          <rect x="30" y="6" width="4" height="8" rx="2" fill="#ea4335"/>
+                        </svg>
+                        Agregar a Google Calendar
+                      </a>
                       <button
                         onClick={() => handleCancelar(cita.id)}
                         className="inline-flex items-center gap-1.5 rounded-lg bg-red-50 px-3 py-1.5 text-xs font-medium text-red-600 transition-colors hover:bg-red-100 dark:bg-red-500/10 dark:text-red-400 dark:hover:bg-red-500/20"
@@ -222,11 +284,13 @@ function ModalProgramarCita({ user, onClose, onSuccess }) {
   const [especialidadId, setEspecialidadId] = useState("");
   const [doctorId, setDoctorId] = useState("");
   const [doctorNombre, setDoctorNombre] = useState("");
+  const [especialidadNombre, setEspecialidadNombre] = useState("");
   const [fecha, setFecha] = useState("");
   const [horaSeleccionada, setHoraSeleccionada] = useState("");
   const [consultorio, setConsultorio] = useState("1");
   const [motivo, setMotivo] = useState("");
   const [observaciones, setObservaciones] = useState("");
+  const [citaAgendada, setCitaAgendada] = useState(null); // datos para step 4
 
   // Calendario mini
   const [calMonth, setCalMonth] = useState(dayjs());
@@ -285,6 +349,10 @@ function ModalProgramarCita({ user, onClose, onSuccess }) {
   const handleSelectDoctor = (doc) => {
     setDoctorId(doc.id);
     setDoctorNombre(`${doc.nombre} ${doc.apellido}`);
+    // Guardar nombre de especialidad del doctor para el enlace de Calendar
+    const espNombre = doc.especialidad_nombre ||
+      especialidades.find((e) => String(e.id) === String(especialidadId))?.nombre || "";
+    setEspecialidadNombre(espNombre);
     setStep(2);
   };
 
@@ -312,8 +380,9 @@ function ModalProgramarCita({ user, onClose, onSuccess }) {
       };
       const res = await axios.post("/citas", payload);
       if (res.data.informacion?.toLowerCase().includes("exitosa")) {
-        toast.success("¡Cita programada exitosamente!");
-        onSuccess();
+        setCitaAgendada({ fecha, hora: horaSeleccionada, doctorNombre, especialidad: especialidadNombre, motivo, consultorio });
+        setStep(4);
+        onSuccess(); // refresca la lista en segundo plano
       } else {
         toast.error(res.data.informacion || "No se pudo programar la cita");
       }
@@ -351,15 +420,20 @@ function ModalProgramarCita({ user, onClose, onSuccess }) {
           </div>
           <div>
             <h3 className="text-lg font-bold text-gray-800 dark:text-dark-50">Programar Cita</h3>
-            <p className="text-xs text-gray-400 dark:text-dark-300">Paso {step} de 3</p>
+            <p className="text-xs text-gray-400 dark:text-dark-300">
+              {step < 4 ? `Paso ${step} de 3` : "¡Completado!"}
+            </p>
           </div>
         </div>
 
         {/* Steps indicator */}
         <div className="mt-4 flex gap-1.5">
-          {[1, 2, 3].map((s) => (
-            <div key={s} className={`h-1.5 flex-1 rounded-full transition-colors ${s <= step ? "bg-indigo-500" : "bg-gray-200 dark:bg-dark-500"}`} />
-          ))}
+          {step < 4
+            ? [1, 2, 3].map((s) => (
+                <div key={s} className={`h-1.5 flex-1 rounded-full transition-colors ${s <= step ? "bg-indigo-500" : "bg-gray-200 dark:bg-dark-500"}`} />
+              ))
+            : <div className="h-1.5 flex-1 rounded-full bg-emerald-500" />
+          }
         </div>
 
         {/* ─── STEP 1: Especialidad + Doctor ─── */}
@@ -598,6 +672,74 @@ function ModalProgramarCita({ user, onClose, onSuccess }) {
               </button>
             </div>
           </form>
+        )}
+
+        {/* ─── STEP 4: Éxito + Google Calendar ─── */}
+        {step === 4 && citaAgendada && (
+          <div className="mt-5 flex flex-col items-center gap-5 text-center">
+            <div className="flex size-16 items-center justify-center rounded-full bg-emerald-100 dark:bg-emerald-500/15">
+              <CheckCircleIcon className="size-8 text-emerald-500" />
+            </div>
+            <div>
+              <h4 className="text-lg font-bold text-gray-800 dark:text-dark-50">¡Cita programada!</h4>
+              <p className="mt-1 text-sm text-gray-500 dark:text-dark-300">
+                Tu cita ha sido registrada exitosamente. Recibirás una invitación en el correo de tu perfil.
+              </p>
+            </div>
+
+            {/* Resumen */}
+            <div className="w-full rounded-xl border border-gray-100 bg-gray-50 p-4 text-left dark:border-dark-500 dark:bg-dark-600">
+              <p className="text-xs font-semibold uppercase tracking-wider text-indigo-500">Detalle de tu cita</p>
+              <div className="mt-2 space-y-1">
+                <p className="text-sm text-gray-700 dark:text-dark-200">
+                  <span className="font-medium">Doctor:</span> Dr./Dra. {citaAgendada.doctorNombre}
+                </p>
+                <p className="text-sm text-gray-700 dark:text-dark-200">
+                  <span className="font-medium">Fecha:</span>{" "}
+                  {dayjs(citaAgendada.fecha).format("dddd D [de] MMMM, YYYY")}
+                </p>
+                <p className="text-sm text-gray-700 dark:text-dark-200">
+                  <span className="font-medium">Hora:</span> {citaAgendada.hora}
+                </p>
+                <p className="text-sm text-gray-700 dark:text-dark-200">
+                  <span className="font-medium">Consultorio:</span> {citaAgendada.consultorio}
+                </p>
+              </div>
+            </div>
+
+            {/* Botón Google Calendar */}
+            <a
+              href={buildGoogleCalendarUrl(citaAgendada)}
+              target="_blank"
+              rel="noopener noreferrer"
+              className="flex w-full items-center justify-center gap-2 rounded-xl border border-gray-200 bg-white px-4 py-3 text-sm font-semibold text-gray-700 shadow-sm transition-colors hover:bg-gray-50 dark:border-dark-500 dark:bg-dark-600 dark:text-dark-100 dark:hover:bg-dark-500"
+            >
+              <svg className="size-5" viewBox="0 0 48 48" fill="none" xmlns="http://www.w3.org/2000/svg">
+                <path d="M34 6H14C9.582 6 6 9.582 6 14v20c0 4.418 3.582 8 8 8h20c4.418 0 8-3.582 8-8V14c0-4.418-3.582-8-8-8z" fill="#fff"/>
+                <path d="M34 6H14C9.582 6 6 9.582 6 14v20c0 4.418 3.582 8 8 8h20c4.418 0 8-3.582 8-8V14c0-4.418-3.582-8-8-8z" fill="#fff"/>
+                <path d="M34.5 34.5h-21v-21h21v21z" fill="#1a73e8"/>
+                <path d="M13.5 13.5v21h21v-21h-21zm10.5 16a5 5 0 110-10 5 5 0 010 10z" fill="#fff"/>
+                <circle cx="24" cy="24" r="4" fill="#1a73e8"/>
+                <path d="M34 6h-4v6h8v-2a4 4 0 00-4-4z" fill="#ea4335"/>
+                <path d="M14 6h-4a4 4 0 00-4 4v2h8V6z" fill="#34a853"/>
+                <path d="M42 14h-2v8h2v-8z" fill="#fbbc04"/>
+                <path d="M6 34v2a4 4 0 004 4h2v-6H6z" fill="#34a853"/>
+                <path d="M34 42h2a4 4 0 004-4v-2h-6v6z" fill="#1a73e8"/>
+                <path d="M6 22v8h2v-8H6z" fill="#34a853"/>
+                <path d="M40 22v8h2v-8h-2z" fill="#1a73e8"/>
+                <path d="M22 6h4v2h-4z" fill="#4285f4"/>
+                <path d="M22 40h4v2h-4z" fill="#34a853"/>
+              </svg>
+              Agregar a Google Calendar
+            </a>
+
+            <button
+              onClick={onClose}
+              className="w-full rounded-xl bg-indigo-600 px-4 py-2.5 text-sm font-semibold text-white shadow-md transition-colors hover:bg-indigo-700"
+            >
+              Listo
+            </button>
+          </div>
         )}
       </div>
     </div>

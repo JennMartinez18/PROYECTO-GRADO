@@ -1,5 +1,6 @@
 import os
 import json
+import requests
 from datetime import datetime, timedelta
 from config.db_config import get_db_connection
 from dotenv import load_dotenv
@@ -11,6 +12,7 @@ TWILIO_AUTH_TOKEN    = os.getenv("TWILIO_AUTH_TOKEN", "")
 TWILIO_WHATSAPP_FROM = os.getenv("TWILIO_WHATSAPP_FROM", "")   # ej: +14155238886
 PAIS_CODE            = os.getenv("WHATSAPP_COUNTRY_CODE", "57")  # Colombia por defecto
 CLINIC_ADDRESS       = os.getenv("CLINIC_ADDRESS", "CRA 8B 51 B 20, Bogotá, Colombia")
+TELEGRAM_BOT_TOKEN   = os.getenv("TELEGRAM_BOT_TOKEN", "")
 
 
 def _normalizar_telefono(telefono: str) -> str:
@@ -47,13 +49,32 @@ def send_whatsapp_message(telefono: str, body: str) -> dict:
         return {"success": False, "error": str(e)}
 
 
-def _registrar_notificacion(conn, cita_id: int, telefono: str, mensaje_error: str, estado: str, tipo: str = "recordatorio_24h"):
+def send_telegram_message(chat_id: int, text: str) -> dict:
+    """Envía un mensaje por Telegram usando la Bot API."""
+    if not TELEGRAM_BOT_TOKEN:
+        return {"success": False, "error": "TELEGRAM_BOT_TOKEN no configurado en .env"}
+    try:
+        url  = f"https://api.telegram.org/bot{TELEGRAM_BOT_TOKEN}/sendMessage"
+        resp = requests.post(
+            url,
+            json={"chat_id": chat_id, "text": text, "parse_mode": "Markdown"},
+            timeout=10,
+        )
+        data = resp.json()
+        if data.get("ok"):
+            return {"success": True, "message_id": data["result"]["message_id"]}
+        return {"success": False, "error": data.get("description", "Error desconocido de Telegram")}
+    except Exception as e:
+        return {"success": False, "error": str(e)}
+
+
+def _registrar_notificacion(conn, cita_id: int, telefono: str, mensaje_error: str, estado: str, tipo: str = "recordatorio_24h", canal: str = "whatsapp"):
     cursor = conn.cursor()
     cursor.execute(
         """INSERT INTO notificaciones_recordatorio
-           (cita_id, telefono, tipo, estado, mensaje_error, fecha_envio)
-           VALUES (%s, %s, %s, %s, %s, NOW())""",
-        (cita_id, telefono, tipo, estado, mensaje_error),
+           (cita_id, telefono, tipo, estado, mensaje_error, fecha_envio, canal)
+           VALUES (%s, %s, %s, %s, %s, NOW(), %s)""",
+        (cita_id, telefono, tipo, estado, mensaje_error, canal),
     )
     conn.commit()
 
@@ -61,7 +82,7 @@ def _registrar_notificacion(conn, cita_id: int, telefono: str, mensaje_error: st
 # ── Recordatorio automático (scheduler 8:00 AM) ───────────────────
 
 def procesar_recordatorios() -> dict:
-    """Busca citas en las próximas 24 horas y envía recordatorios por WhatsApp."""
+    """Busca citas en las próximas 24 horas y envía recordatorios por WhatsApp y Telegram."""
     try:
         conn    = get_db_connection()
         cursor  = conn.cursor(dictionary=True)
@@ -72,26 +93,29 @@ def procesar_recordatorios() -> dict:
             """SELECT c.id, c.fecha, c.hora, c.consultorio,
                       p.nombre   AS paciente_nombre,
                       p.apellido AS paciente_apellido,
-                      p.telefono
+                      p.telefono,
+                      p.telegram_chat_id
                FROM citas c
                JOIN pacientes p ON c.paciente_id = p.id
                WHERE c.estado IN ('Programada', 'Confirmada')
-                 AND TIMESTAMP(c.fecha, c.hora) BETWEEN %s AND %s
-                 AND c.id NOT IN (
-                     SELECT cita_id FROM notificaciones_recordatorio
-                     WHERE tipo = 'recordatorio_24h' AND estado = 'enviado'
-                 )""",
+                 AND TIMESTAMP(c.fecha, c.hora) BETWEEN %s AND %s""",
             (ahora, en_24h),
         )
-        citas    = cursor.fetchall()
-        enviados = 0
+        citas = cursor.fetchall()
+
+        # Citas ya notificadas por canal (evita duplicados)
+        cursor.execute(
+            """SELECT cita_id, canal FROM notificaciones_recordatorio
+               WHERE tipo = 'recordatorio_24h' AND estado = 'enviado'"""
+        )
+        ya_enviadas       = cursor.fetchall()
+        enviadas_whatsapp = {r["cita_id"] for r in ya_enviadas if r["canal"] == "whatsapp"}
+        enviadas_telegram = {r["cita_id"] for r in ya_enviadas if r["canal"] == "telegram"}
+
+        enviados_wa = 0
+        enviados_tg = 0
 
         for cita in citas:
-            telefono = cita.get("telefono") or ""
-            if not telefono:
-                _registrar_notificacion(conn, cita["id"], "", "Sin teléfono registrado", "fallido")
-                continue
-
             nombre = f"{cita['paciente_nombre']} {cita['paciente_apellido']}"
             fecha  = str(cita["fecha"])
             hora   = str(cita["hora"])
@@ -99,7 +123,7 @@ def procesar_recordatorios() -> dict:
             body = (
                 f"🦷 *Recordatorio de Cita Odontológica*\n\n"
                 f"Hola {nombre} 👋,\n\n"
-                f"Te recordamos tu cita programada para mañana:\n\n"
+                f"Te recordamos tu cita programada:\n\n"
                 f"📅 *Fecha:* {fecha}\n"
                 f"⏰ *Hora:* {hora}\n"
                 f"🏥 *Consultorio:* {cita['consultorio']}\n"
@@ -109,15 +133,31 @@ def procesar_recordatorios() -> dict:
                 f"¡Te esperamos! 😊"
             )
 
-            resultado = send_whatsapp_message(telefono, body)
-            estado    = "enviado" if resultado["success"] else "fallido"
-            error_msg = resultado.get("error", "") if not resultado["success"] else ""
-            _registrar_notificacion(conn, cita["id"], telefono, error_msg, estado, "recordatorio_24h")
-            if resultado["success"]:
-                enviados += 1
+            # ── WhatsApp ──────────────────────────────────────────
+            telefono = cita.get("telefono") or ""
+            if cita["id"] not in enviadas_whatsapp:
+                if telefono:
+                    resultado = send_whatsapp_message(telefono, body)
+                    estado    = "enviado" if resultado["success"] else "fallido"
+                    error_msg = resultado.get("error", "") if not resultado["success"] else ""
+                    _registrar_notificacion(conn, cita["id"], telefono, error_msg, estado, "recordatorio_24h", "whatsapp")
+                    if resultado["success"]:
+                        enviados_wa += 1
+                else:
+                    _registrar_notificacion(conn, cita["id"], "", "Sin teléfono registrado", "fallido", "recordatorio_24h", "whatsapp")
+
+            # ── Telegram ──────────────────────────────────────────
+            chat_id = cita.get("telegram_chat_id")
+            if chat_id and cita["id"] not in enviadas_telegram:
+                resultado = send_telegram_message(chat_id, body)
+                estado    = "enviado" if resultado["success"] else "fallido"
+                error_msg = resultado.get("error", "") if not resultado["success"] else ""
+                _registrar_notificacion(conn, cita["id"], "", error_msg, estado, "recordatorio_24h", "telegram")
+                if resultado["success"]:
+                    enviados_tg += 1
 
         conn.close()
-        return {"procesadas": len(citas), "enviadas": enviados}
+        return {"procesadas": len(citas), "enviadas_whatsapp": enviados_wa, "enviadas_telegram": enviados_tg}
     except Exception as e:
         return {"error": str(e)}
 
@@ -125,7 +165,7 @@ def procesar_recordatorios() -> dict:
 # ── Confirmación al crear cita ─────────────────────────────────────
 
 def enviar_confirmacion_cita(cita_id: int) -> dict:
-    """Envía un mensaje de confirmación al paciente cuando se registra su cita."""
+    """Envía un mensaje de confirmación al paciente cuando se registra su cita (WhatsApp + Telegram)."""
     try:
         conn   = get_db_connection()
         cursor = conn.cursor(dictionary=True)
@@ -133,7 +173,8 @@ def enviar_confirmacion_cita(cita_id: int) -> dict:
             """SELECT c.id, c.fecha, c.hora, c.consultorio,
                       p.nombre   AS paciente_nombre,
                       p.apellido AS paciente_apellido,
-                      p.telefono
+                      p.telefono,
+                      p.telegram_chat_id
                FROM citas c
                JOIN pacientes p ON c.paciente_id = p.id
                WHERE c.id = %s""",
@@ -143,12 +184,6 @@ def enviar_confirmacion_cita(cita_id: int) -> dict:
         if not cita:
             conn.close()
             return {"success": False, "error": "Cita no encontrada"}
-
-        telefono = cita.get("telefono") or ""
-        if not telefono:
-            _registrar_notificacion(conn, cita_id, "", "Sin teléfono registrado", "fallido", "confirmacion")
-            conn.close()
-            return {"success": False, "error": "Paciente sin teléfono"}
 
         nombre = f"{cita['paciente_nombre']} {cita['paciente_apellido']}"
         fecha  = str(cita["fecha"])
@@ -167,12 +202,29 @@ def enviar_confirmacion_cita(cita_id: int) -> dict:
             f"¡Hasta pronto! 😊"
         )
 
-        resultado = send_whatsapp_message(telefono, body)
-        estado    = "enviado" if resultado["success"] else "fallido"
-        error_msg = resultado.get("error", "") if not resultado["success"] else ""
-        _registrar_notificacion(conn, cita_id, telefono, error_msg, estado, "confirmacion")
+        resultado_wa = {"success": False, "error": "Sin teléfono"}
+        resultado_tg = {"success": False, "error": "Sin Telegram vinculado"}
+
+        # ── WhatsApp ──────────────────────────────────────────────
+        telefono = cita.get("telefono") or ""
+        if telefono:
+            resultado_wa = send_whatsapp_message(telefono, body)
+            estado    = "enviado" if resultado_wa["success"] else "fallido"
+            error_msg = resultado_wa.get("error", "") if not resultado_wa["success"] else ""
+            _registrar_notificacion(conn, cita_id, telefono, error_msg, estado, "confirmacion", "whatsapp")
+        else:
+            _registrar_notificacion(conn, cita_id, "", "Sin teléfono registrado", "fallido", "confirmacion", "whatsapp")
+
+        # ── Telegram ──────────────────────────────────────────────
+        chat_id = cita.get("telegram_chat_id")
+        if chat_id:
+            resultado_tg = send_telegram_message(chat_id, body)
+            estado    = "enviado" if resultado_tg["success"] else "fallido"
+            error_msg = resultado_tg.get("error", "") if not resultado_tg["success"] else ""
+            _registrar_notificacion(conn, cita_id, "", error_msg, estado, "confirmacion", "telegram")
+
         conn.close()
-        return resultado
+        return {"whatsapp": resultado_wa, "telegram": resultado_tg}
     except Exception as e:
         return {"success": False, "error": str(e)}
 

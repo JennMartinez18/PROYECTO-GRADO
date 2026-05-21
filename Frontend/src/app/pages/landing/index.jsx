@@ -110,7 +110,7 @@ export default function LandingPage() {
               </svg>
             </div>
             <span className="text-lg font-bold text-gray-900">
-              María Luiza Balza
+              María Luisa Balza
             </span>
           </div>
           <div className="hidden items-center gap-8 md:flex">
@@ -142,7 +142,7 @@ export default function LandingPage() {
           <div className="mx-auto max-w-3xl text-center">
             <h1 className="text-4xl font-extrabold tracking-tight text-gray-900 md:text-5xl lg:text-6xl">
               Consultorio Odontológico{" "}
-              <span className="text-indigo-600">María Luiza Balza</span>
+              <span className="text-indigo-600">María Luisa Balza</span>
             </h1>
             <p className="mt-6 text-lg text-gray-600 md:text-xl">
               Cuidamos tu sonrisa con tratamientos odontológicos modernos y
@@ -391,7 +391,7 @@ export default function LandingPage() {
         <div className="mx-auto max-w-7xl px-6 text-center">
           <p className="text-sm text-gray-500">
             © {new Date().getFullYear()} Consultorio Odontológico María Luiza
-            Balza. Todos los derechos reservados.
+            Balsa. Todos los derechos reservados.
           </p>
         </div>
       </footer>

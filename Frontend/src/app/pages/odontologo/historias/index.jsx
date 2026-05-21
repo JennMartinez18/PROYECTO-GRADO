@@ -376,7 +376,6 @@ export default function OdontologoHistorias() {
                 <DetailRow label="Diagnóstico" value={selected.diagnostico} />
                 <DetailRow label="Observaciones" value={selected.observaciones} />
                 <DetailRow label="Recomendaciones" value={selected.recomendaciones} />
-                <DetailRow label="Próxima Cita" value={selected.proxima_cita?.split("T")[0]} />
               </div>
             </div>
           </div>

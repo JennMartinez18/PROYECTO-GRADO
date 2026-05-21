@@ -68,7 +68,7 @@ export default function Home() {
               {new Date().toLocaleDateString("es-ES", { weekday: "long", day: "numeric", month: "long", year: "numeric" })}
             </p>
             <h2 className="mt-1 text-2xl font-bold sm:text-3xl">¡Hola, {user?.nombre || "Usuario"}!</h2>
-            <p className="mt-2 max-w-md text-sm text-indigo-200">Resumen del consultorio odontológico María Luiza Balza</p>
+            <p className="mt-2 max-w-md text-sm text-indigo-200">Resumen del consultorio odontológico María Luisa Balza</p>
           </div>
         </div>
 

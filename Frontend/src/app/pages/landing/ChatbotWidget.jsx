@@ -10,7 +10,7 @@ export default function ChatbotWidget() {
     {
       role: "assistant",
       content:
-        "¡Hola! Bienvenido al Consultorio Odontológico María Luiza Balza. Soy tu asistente virtual. ¿En qué puedo ayudarte hoy?",
+        "¡Hola! Bienvenido al Consultorio Odontológico María Luisa Balza. Soy tu asistente virtual. ¿En qué puedo ayudarte hoy?",
     },
   ]);
   const [input, setInput] = useState("");
@@ -130,7 +130,7 @@ export default function ChatbotWidget() {
               <div>
                 <p className="text-sm font-semibold">Asistente Virtual</p>
                 <p className="text-xs text-indigo-200">
-                  Consultorio María Luiza Balza
+                  Consultorio María Luisa Balza
                 </p>
               </div>
             </div>

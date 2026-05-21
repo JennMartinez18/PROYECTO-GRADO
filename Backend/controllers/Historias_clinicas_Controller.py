@@ -67,6 +67,17 @@ class HistoriasClinicasController:
         try:
             conn = get_db_connection()
             cursor = conn.cursor()
+
+            # Evitar registrar más de una historia por cita
+            if historia.cita_id:
+                cursor.execute(
+                    "SELECT id FROM historias_clinicas WHERE cita_id = %s",
+                    (historia.cita_id,),
+                )
+                if cursor.fetchone():
+                    conn.close()
+                    return {"resultado": "Esta cita ya tiene una historia clínica registrada"}
+
             cursor.execute(
                 "INSERT INTO historias_clinicas (paciente_id, cita_id, usuario_id, fecha_atencion, "
                 "motivo_consulta, diagnostico, observaciones, recomendaciones, proxima_cita) "

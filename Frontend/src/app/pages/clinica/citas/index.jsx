@@ -275,15 +275,7 @@ export default function Citas() {
         return (
           <div className="flex items-center gap-1">
             {(c.estado === "Programada" || c.estado === "Confirmada") && (
-              <>
-                <button onClick={() => handleChangeEstado(c.id, "En_Curso")} className="rounded-lg px-2 py-1 text-xs font-medium text-blue-600 transition-colors hover:bg-blue-50 dark:text-blue-400 dark:hover:bg-blue-500/10">En Curso</button>
-                <button onClick={() => handleChangeEstado(c.id, "Completada")} className="rounded-lg px-2 py-1 text-xs font-medium text-emerald-600 transition-colors hover:bg-emerald-50 dark:text-emerald-400 dark:hover:bg-emerald-500/10">Completar</button>
-                <button onClick={() => handleChangeEstado(c.id, "No_Asistio")} className="rounded-lg px-2 py-1 text-xs font-medium text-orange-500 transition-colors hover:bg-orange-50 dark:text-orange-400 dark:hover:bg-orange-500/10">No Asistió</button>
-                <button onClick={() => handleChangeEstado(c.id, "Cancelada")} className="rounded-lg px-2 py-1 text-xs font-medium text-red-500 transition-colors hover:bg-red-50 dark:text-red-400 dark:hover:bg-red-500/10">Cancelar</button>
-              </>
-            )}
-            {c.estado === "En_Curso" && (
-              <button onClick={() => handleChangeEstado(c.id, "Completada")} className="rounded-lg px-2 py-1 text-xs font-medium text-emerald-600 transition-colors hover:bg-emerald-50 dark:text-emerald-400 dark:hover:bg-emerald-500/10">Completar</button>
+              <button onClick={() => handleChangeEstado(c.id, "Cancelada")} className="rounded-lg px-2 py-1 text-xs font-medium text-red-500 transition-colors hover:bg-red-50 dark:text-red-400 dark:hover:bg-red-500/10">Cancelar</button>
             )}
             <button onClick={() => handleEdit(c)} className="rounded-lg p-1.5 text-gray-400 transition-colors hover:bg-gray-100 hover:text-gray-600 dark:hover:bg-dark-600">
               <PencilSquareIcon className="size-4" />

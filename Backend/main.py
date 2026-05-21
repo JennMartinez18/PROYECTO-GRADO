@@ -21,6 +21,7 @@ from routes.Dashboard_Routes import router as dashboard_router
 from routes.Reportes_Routes import router as reportes_router
 from routes.Notificaciones_Routes import router as notificaciones_router
 from routes.Backup_Routes import router as backup_router
+from routes.Telegram_Routes import router as telegram_router
 from chatbot.chatbot_routes import router as chatbot_router
 from fastapi.middleware.cors import CORSMiddleware
 from services.scheduler import start_scheduler, stop_scheduler
@@ -94,6 +95,7 @@ app.include_router(roles_router, tags=["🔑 Roles"])
 app.include_router(reportes_router, prefix="/reportes", tags=["📈 Reportes"])
 app.include_router(notificaciones_router, tags=["🔔 Notificaciones WhatsApp"])
 app.include_router(backup_router, tags=["💾 Backup"])
+app.include_router(telegram_router, tags=["📲 Telegram"])
 
 if __name__ == "__main__":
     uvicorn.run(app, host="0.0.0.0", port=8000)

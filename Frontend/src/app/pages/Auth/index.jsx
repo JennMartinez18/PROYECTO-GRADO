@@ -45,7 +45,7 @@ export default function SignIn() {
                 Consultorio Odontológico
               </h2>
               <p className="text-gray-400 dark:text-dark-300">
-                María Luiza Balza
+                María Luisa Balza
               </p>
               <p className="mt-2 text-sm text-gray-400 dark:text-dark-300">
                 Ingrese sus credenciales para continuar
@@ -109,7 +109,7 @@ export default function SignIn() {
             </Link>
           </div>
           <div className="mt-4 flex justify-center text-xs text-gray-400 dark:text-dark-300">
-            <span>Consultorio María Luiza Balza &copy; {new Date().getFullYear()}</span>
+            <span>Consultorio María Luisa Balza &copy; {new Date().getFullYear()}</span>
           </div>
         </div>
       </main>

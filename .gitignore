@@ -27,3 +27,6 @@ Thumbs.db
 # IDE
 .vscode/settings.json
 .idea/
+
+# Google service account credentials
+Backend/proyectluisa-26aca86c0bea.json

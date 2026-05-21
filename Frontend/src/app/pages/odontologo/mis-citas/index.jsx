@@ -13,6 +13,7 @@ import {
   TableCellsIcon,
   ChevronLeftIcon,
   ChevronRightIcon,
+  ArrowLeftIcon,
 } from "@heroicons/react/24/outline";
 import axios from "utils/axios";
 import { useAuthContext } from "app/contexts/auth/context";
@@ -56,15 +57,18 @@ export default function OdontologoMisCitas() {
   const [search, setSearch] = useState("");
   const [filtro, setFiltro] = useState("todas");
   const [vista, setVista] = useState("calendario"); // "calendario" | "tabla"
-  const [showHistoriaModal, setShowHistoriaModal] = useState(false);
-  const [citaCompletada, setCitaCompletada] = useState(null);
+
+  // ── Modal unificado: reemplaza selectedCita + showHistoriaModal + citaCompletada ──
+  const [modalCita, setModalCita] = useState(null);
+  const [modalStep, setModalStep] = useState("detalle"); // "detalle" | "historia"
   const [historiaForm, setHistoriaForm] = useState(emptyHistoria);
+  const [savingEstado, setSavingEstado] = useState(false);
+  const [savingHistoria, setSavingHistoria] = useState(false);
 
   // Calendario
   const [calMonth, setCalMonth] = useState(dayjs());
   const [calCitas, setCalCitas] = useState([]);
   const [selectedDay, setSelectedDay] = useState(null);
-  const [selectedCita, setSelectedCita] = useState(null);
 
   // Fetch citas para tabla
   const fetchCitas = useCallback(async () => {
@@ -93,7 +97,22 @@ export default function OdontologoMisCitas() {
   useEffect(() => { fetchCitas(); }, [fetchCitas]);
   useEffect(() => { fetchCalCitas(); }, [fetchCalCitas]);
 
-  const handleCambiarEstado = async (citaId, nuevoEstado) => {
+  // Abre el modal en paso "detalle" con la cita seleccionada
+  const openModal = (cita) => {
+    setModalCita(cita);
+    setModalStep("detalle");
+    setHistoriaForm({ ...emptyHistoria, motivo_consulta: cita.motivo_consulta || "" });
+  };
+
+  // Cierra y limpia el modal completamente
+  const closeModal = () => {
+    setModalCita(null);
+    setModalStep("detalle");
+    setHistoriaForm(emptyHistoria);
+  };
+
+  const handleCambiarEstado = async (citaId, nuevoEstado, citaObj = null) => {
+    setSavingEstado(true);
     try {
       const res = await axios.patch(`/citas/${citaId}/estado`, { estado: nuevoEstado });
       if (res.data.resultado && typeof res.data.resultado === "string") {
@@ -105,25 +124,33 @@ export default function OdontologoMisCitas() {
       fetchCalCitas();
 
       if (nuevoEstado === "Completada") {
-        const cita = citas.find((c) => c.id === citaId) || calCitas.find((c) => c.id === citaId);
-        if (cita) {
-          setCitaCompletada(cita);
-          setHistoriaForm({ ...emptyHistoria, motivo_consulta: cita.motivo_consulta || "" });
-          setShowHistoriaModal(true);
-          setSelectedCita(null);
+        // citaObj viene de la tabla; modalCita viene del modal — siempre abrimos historia
+        const src = citaObj || modalCita;
+        if (src) {
+          setModalCita({ ...src, estado: nuevoEstado, tiene_historia: 0 });
+          setHistoriaForm({ ...emptyHistoria, motivo_consulta: src.motivo_consulta || "" });
         }
+        setModalStep("historia");
+      } else if (nuevoEstado === "Cancelada" || nuevoEstado === "No_Asistio") {
+        closeModal();
+      } else if (!citaObj && modalCita?.id === citaId) {
+        // Acción hecha desde el modal → actualizar estado en el modal sin cerrar
+        setModalCita((prev) => prev ? { ...prev, estado: nuevoEstado } : null);
       }
     } catch {
       toast.error("Error al cambiar estado");
+    } finally {
+      setSavingEstado(false);
     }
   };
 
   const handleHistoriaSubmit = async (e) => {
     e.preventDefault();
-    if (!citaCompletada) return;
+    if (!modalCita) return;
+    setSavingHistoria(true);
     const payload = {
-      paciente_id: citaCompletada.paciente_id,
-      cita_id: citaCompletada.id,
+      paciente_id: modalCita.paciente_id,
+      cita_id: modalCita.id,
       usuario_id: user?.id,
       fecha_atencion: new Date().toISOString().split("T")[0],
       ...historiaForm,
@@ -136,18 +163,12 @@ export default function OdontologoMisCitas() {
         return;
       }
       toast.success(res.data.informacion || "Historia clínica creada");
-      setShowHistoriaModal(false);
-      setCitaCompletada(null);
-      setHistoriaForm(emptyHistoria);
+      closeModal();
     } catch {
       toast.error("Error al crear historia clínica");
+    } finally {
+      setSavingHistoria(false);
     }
-  };
-
-  const handleSkipHistoria = () => {
-    setShowHistoriaModal(false);
-    setCitaCompletada(null);
-    setHistoriaForm(emptyHistoria);
   };
 
   const tabs = [
@@ -224,21 +245,35 @@ export default function OdontologoMisCitas() {
       cell: ({ row }) => {
         const cita = row.original;
         return (
-          <div className="flex gap-1.5">
+          <div className="flex flex-wrap gap-1.5">
             {accionesEstado(cita).map((acc) => (
               <button
                 key={acc.estado}
-                onClick={() => handleCambiarEstado(cita.id, acc.estado)}
-                className={`rounded-lg px-3 py-1.5 text-xs font-medium text-white shadow-sm transition-colors ${acc.color}`}
+                onClick={() => handleCambiarEstado(cita.id, acc.estado, acc.estado === "Completada" ? cita : null)}
+                disabled={savingEstado}
+                className={`rounded-lg px-3 py-1.5 text-xs font-medium text-white shadow-sm transition-colors disabled:opacity-60 ${acc.color}`}
               >
                 {acc.label}
               </button>
             ))}
+            {cita.estado === "Completada" && !cita.tiene_historia && (
+              <button
+                onClick={() => openModal(cita)}
+                className="rounded-lg border border-emerald-200 px-3 py-1.5 text-xs font-medium text-emerald-700 transition-colors hover:bg-emerald-50 dark:border-emerald-500/30 dark:text-emerald-400 dark:hover:bg-emerald-500/10"
+              >
+                Registrar Historia
+              </button>
+            )}
+            {cita.estado === "Completada" && cita.tiene_historia && (
+              <span className="inline-flex items-center gap-1 rounded-lg border border-emerald-100 px-3 py-1.5 text-xs font-medium text-emerald-600 dark:border-emerald-500/20 dark:text-emerald-500">
+                <CheckCircleIcon className="size-3.5" /> Historia ✓
+              </span>
+            )}
           </div>
         );
       },
     },
-  ], []);
+  ], [savingEstado]);
 
   const table = useReactTable({
     data: filtroFiltered,
@@ -407,7 +442,7 @@ export default function OdontologoMisCitas() {
                           return (
                             <button
                               key={c.id}
-                              onClick={(e) => { e.stopPropagation(); setSelectedCita(c); }}
+                              onClick={(e) => { e.stopPropagation(); openModal(c); }}
                               className={`block w-full truncate rounded px-1.5 py-0.5 text-left text-[10px] font-medium leading-tight ${cfg.color}`}
                             >
                               {formatHora(c.hora)} {c.paciente_nombre}
@@ -455,7 +490,7 @@ export default function OdontologoMisCitas() {
                       return (
                         <div
                           key={c.id}
-                          onClick={() => setSelectedCita(c)}
+                          onClick={() => openModal(c)}
                           className="flex cursor-pointer items-center justify-between rounded-xl border border-gray-100 p-3 transition-all hover:border-teal-300 hover:shadow-sm dark:border-dark-500 dark:hover:border-teal-500"
                         >
                           <div className="flex items-center gap-3">
@@ -531,133 +566,162 @@ export default function OdontologoMisCitas() {
           </Card>
         )}
 
-        {/* ═══ Modal Detalle de Cita (Calendario) ═══ */}
-        {selectedCita && !showHistoriaModal && (
-          <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4">
-            <div className="relative w-full max-w-md rounded-2xl bg-white p-6 shadow-xl dark:bg-dark-700">
-              <button onClick={() => setSelectedCita(null)} className="absolute right-4 top-4 rounded-lg p-1 text-gray-400 hover:bg-gray-100 hover:text-gray-600 dark:hover:bg-dark-600">
-                <XMarkIcon className="size-5" />
-              </button>
-              <div className="flex items-center gap-3">
-                <div className={`flex size-10 items-center justify-center rounded-xl ${(estadoConfig[selectedCita.estado] || estadoConfig.Programada).color}`}>
-                  {(() => { const Ic = (estadoConfig[selectedCita.estado] || estadoConfig.Programada).Icon; return <Ic className="size-5" />; })()}
-                </div>
-                <div>
-                  <h3 className="text-lg font-bold text-gray-800 dark:text-dark-50">Detalle de Cita</h3>
-                  <span className={`mt-0.5 inline-block rounded-full px-2.5 py-0.5 text-[10px] font-semibold ${(estadoConfig[selectedCita.estado] || estadoConfig.Programada).color}`}>
-                    {selectedCita.estado?.replace("_", " ")}
-                  </span>
-                </div>
-              </div>
-              <div className="mt-4 space-y-3">
-                <InfoRow label="Paciente" value={`${selectedCita.paciente_nombre || ""} ${selectedCita.paciente_apellido || ""}`} />
-                <InfoRow label="Fecha" value={dayjs((selectedCita.fecha || "").split("T")[0]).format("dddd D [de] MMMM, YYYY")} />
-                <InfoRow label="Hora" value={formatHora(selectedCita.hora)} />
-                <InfoRow label="Especialidad" value={selectedCita.especialidad_nombre || "General"} />
-                <InfoRow label="Consultorio" value={selectedCita.consultorio} />
-                {selectedCita.motivo_consulta && <InfoRow label="Motivo" value={selectedCita.motivo_consulta} />}
-                {selectedCita.observaciones && <InfoRow label="Observaciones" value={selectedCita.observaciones} />}
-              </div>
-              {/* Acciones */}
-              {accionesEstado(selectedCita).length > 0 && (
-                <div className="mt-5 flex gap-2">
-                  {accionesEstado(selectedCita).map((acc) => (
-                    <button
-                      key={acc.estado}
-                      onClick={() => handleCambiarEstado(selectedCita.id, acc.estado)}
-                      className={`flex-1 rounded-xl px-4 py-2.5 text-sm font-medium text-white shadow-sm transition-colors ${acc.color}`}
-                    >
-                      {acc.label}
-                    </button>
-                  ))}
-                </div>
-              )}
-            </div>
-          </div>
-        )}
-
-        {/* ═══ Modal Historia Clínica al Completar ═══ */}
-        {showHistoriaModal && citaCompletada && (
+        {/* ═══ Modal Unificado: Detalle + Historia en un solo flujo ═══ */}
+        {modalCita && (
           <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4">
             <div className="relative max-h-[90vh] w-full max-w-lg overflow-y-auto rounded-2xl bg-white p-6 shadow-xl dark:bg-dark-700">
-              <button onClick={handleSkipHistoria} className="absolute right-4 top-4 rounded-lg p-1 text-gray-400 hover:bg-gray-100 hover:text-gray-600 dark:hover:bg-dark-600">
-                <XMarkIcon className="size-5" />
-              </button>
-              <div className="flex items-center gap-3">
-                <div className="flex size-10 items-center justify-center rounded-xl bg-gradient-to-br from-emerald-500 to-teal-600 text-white">
-                  <ClipboardDocumentListIcon className="size-5" />
+
+              {/* ── Cabecera del modal ── */}
+              <div className="mb-5 flex items-center gap-3">
+                {modalStep === "historia" && (
+                  <button
+                    onClick={() => setModalStep("detalle")}
+                    className="shrink-0 rounded-lg p-1 text-gray-400 hover:bg-gray-100 hover:text-gray-600 dark:hover:bg-dark-600"
+                    title="Volver al detalle"
+                  >
+                    <ArrowLeftIcon className="size-5" />
+                  </button>
+                )}
+                <div className={`flex size-10 shrink-0 items-center justify-center rounded-xl ${
+                  modalStep === "historia"
+                    ? "bg-gradient-to-br from-emerald-500 to-teal-600 text-white"
+                    : (estadoConfig[modalCita.estado] || estadoConfig.Programada).color
+                }`}>
+                  {modalStep === "historia"
+                    ? <ClipboardDocumentListIcon className="size-5" />
+                    : (() => { const Ic = (estadoConfig[modalCita.estado] || estadoConfig.Programada).Icon; return <Ic className="size-5" />; })()
+                  }
                 </div>
-                <div>
-                  <h3 className="text-lg font-bold text-gray-800 dark:text-dark-50">Registrar Historia Clínica</h3>
-                  <p className="text-xs text-gray-400 dark:text-dark-300">
-                    Paciente: {citaCompletada.paciente_nombre} {citaCompletada.paciente_apellido}
+                <div className="min-w-0 flex-1">
+                  <h3 className="text-base font-bold text-gray-800 dark:text-dark-50">
+                    {modalStep === "historia" ? "Registrar Historia Clínica" : "Detalle de Cita"}
+                  </h3>
+                  <p className="truncate text-xs text-gray-400 dark:text-dark-300">
+                    {modalCita.paciente_nombre} {modalCita.paciente_apellido}
+                    {modalStep === "detalle" && (
+                      <> &middot; <span className="font-semibold">{modalCita.estado?.replace("_", " ")}</span></>
+                    )}
                   </p>
                 </div>
+                <button onClick={closeModal} className="shrink-0 rounded-lg p-1 text-gray-400 hover:bg-gray-100 hover:text-gray-600 dark:hover:bg-dark-600">
+                  <XMarkIcon className="size-5" />
+                </button>
               </div>
-              <form onSubmit={handleHistoriaSubmit} className="mt-4 space-y-4">
-                <div>
-                  <label className="mb-1 block text-sm font-medium text-gray-700 dark:text-dark-200">Motivo de Consulta *</label>
-                  <textarea
-                    value={historiaForm.motivo_consulta}
-                    onChange={(e) => setHistoriaForm({ ...historiaForm, motivo_consulta: e.target.value })}
-                    required
-                    rows={2}
-                    className="w-full rounded-xl border border-gray-200 bg-gray-50 px-4 py-2.5 text-sm dark:border-dark-500 dark:bg-dark-600 dark:text-dark-100"
-                  />
-                </div>
-                <div>
-                  <label className="mb-1 block text-sm font-medium text-gray-700 dark:text-dark-200">Diagnóstico *</label>
-                  <textarea
-                    value={historiaForm.diagnostico}
-                    onChange={(e) => setHistoriaForm({ ...historiaForm, diagnostico: e.target.value })}
-                    required
-                    rows={2}
-                    className="w-full rounded-xl border border-gray-200 bg-gray-50 px-4 py-2.5 text-sm dark:border-dark-500 dark:bg-dark-600 dark:text-dark-100"
-                  />
-                </div>
-                <div>
-                  <label className="mb-1 block text-sm font-medium text-gray-700 dark:text-dark-200">Observaciones</label>
-                  <textarea
-                    value={historiaForm.observaciones}
-                    onChange={(e) => setHistoriaForm({ ...historiaForm, observaciones: e.target.value })}
-                    rows={2}
-                    className="w-full rounded-xl border border-gray-200 bg-gray-50 px-4 py-2.5 text-sm dark:border-dark-500 dark:bg-dark-600 dark:text-dark-100"
-                  />
-                </div>
-                <div>
-                  <label className="mb-1 block text-sm font-medium text-gray-700 dark:text-dark-200">Recomendaciones</label>
-                  <textarea
-                    value={historiaForm.recomendaciones}
-                    onChange={(e) => setHistoriaForm({ ...historiaForm, recomendaciones: e.target.value })}
-                    rows={2}
-                    className="w-full rounded-xl border border-gray-200 bg-gray-50 px-4 py-2.5 text-sm dark:border-dark-500 dark:bg-dark-600 dark:text-dark-100"
-                  />
-                </div>
-                <div>
-                  <label className="mb-1 block text-sm font-medium text-gray-700 dark:text-dark-200">Próxima Cita</label>
-                  <input
-                    type="date"
-                    value={historiaForm.proxima_cita}
-                    onChange={(e) => setHistoriaForm({ ...historiaForm, proxima_cita: e.target.value })}
-                    className="w-full rounded-xl border border-gray-200 bg-gray-50 px-4 py-2.5 text-sm dark:border-dark-500 dark:bg-dark-600 dark:text-dark-100"
-                  />
-                </div>
-                <div className="flex gap-3 pt-2">
-                  <button
-                    type="button"
-                    onClick={handleSkipHistoria}
-                    className="flex-1 rounded-xl border border-gray-200 px-4 py-2.5 text-sm font-medium text-gray-600 transition-colors hover:bg-gray-50 dark:border-dark-500 dark:text-dark-200 dark:hover:bg-dark-600"
-                  >
-                    Omitir
-                  </button>
-                  <button
-                    type="submit"
-                    className="flex-1 rounded-xl bg-teal-600 px-4 py-2.5 text-sm font-medium text-white shadow-md transition-colors hover:bg-teal-700"
-                  >
-                    Guardar Historia
-                  </button>
-                </div>
-              </form>
+
+              {/* ── Paso 1: Detalle ── */}
+              {modalStep === "detalle" && (
+                <>
+                  <div className="space-y-3">
+                    <InfoRow label="Fecha" value={dayjs((modalCita.fecha || "").split("T")[0]).format("dddd D [de] MMMM, YYYY")} />
+                    <InfoRow label="Hora" value={formatHora(modalCita.hora)} />
+                    <InfoRow label="Especialidad" value={modalCita.especialidad_nombre || "General"} />
+                    <InfoRow label="Consultorio" value={modalCita.consultorio} />
+                    {modalCita.motivo_consulta && <InfoRow label="Motivo" value={modalCita.motivo_consulta} />}
+                    {modalCita.observaciones && <InfoRow label="Observaciones" value={modalCita.observaciones} />}
+                  </div>
+
+                  {/* Indicador de siguiente paso cuando está En_Curso */}
+                  {modalCita.estado === "En_Curso" && (
+                    <p className="mt-4 rounded-xl bg-emerald-50 px-4 py-2.5 text-xs text-emerald-700 dark:bg-emerald-500/10 dark:text-emerald-400">
+                      Al marcar como <strong>Completada</strong> se abrirá el formulario de historia clínica directamente en este modal.
+                    </p>
+                  )}
+
+                  {/* Acciones de estado */}
+                  {accionesEstado(modalCita).length > 0 && (
+                    <div className="mt-5 flex gap-2">
+                      {accionesEstado(modalCita).map((acc) => (
+                        <button
+                          key={acc.estado}
+                          onClick={() => handleCambiarEstado(modalCita.id, acc.estado)}
+                          disabled={savingEstado}
+                          className={`flex-1 rounded-xl px-4 py-2.5 text-sm font-medium text-white shadow-sm transition-colors disabled:opacity-60 ${acc.color}`}
+                        >
+                          {savingEstado ? "..." : acc.label}
+                        </button>
+                      ))}
+                    </div>
+                  )}
+
+                  {/* Acceso a historia si la cita está completada y aún no tiene historia */}
+                  {modalCita.estado === "Completada" && !modalCita.tiene_historia && (
+                    <button
+                      onClick={() => setModalStep("historia")}
+                      className="mt-3 flex w-full items-center justify-center gap-2 rounded-xl border border-emerald-200 px-4 py-2.5 text-sm font-medium text-emerald-700 transition-colors hover:bg-emerald-50 dark:border-emerald-500/30 dark:text-emerald-400 dark:hover:bg-emerald-500/10"
+                    >
+                      <ClipboardDocumentListIcon className="size-4" />
+                      Registrar Historia Clínica
+                    </button>
+                  )}
+                  {modalCita.estado === "Completada" && modalCita.tiene_historia && (
+                    <p className="mt-3 flex items-center justify-center gap-2 rounded-xl bg-emerald-50 px-4 py-2.5 text-sm font-medium text-emerald-700 dark:bg-emerald-500/10 dark:text-emerald-400">
+                      <CheckCircleIcon className="size-4" />
+                      Historia clínica ya registrada
+                    </p>
+                  )}
+                </>
+              )}
+
+              {/* ── Paso 2: Historia Clínica ── */}
+              {modalStep === "historia" && (
+                <form onSubmit={handleHistoriaSubmit} className="space-y-4">
+                  <div>
+                    <label className="mb-1 block text-sm font-medium text-gray-700 dark:text-dark-200">Motivo de Consulta *</label>
+                    <textarea
+                      value={historiaForm.motivo_consulta}
+                      onChange={(e) => setHistoriaForm({ ...historiaForm, motivo_consulta: e.target.value })}
+                      required
+                      rows={2}
+                      className="w-full rounded-xl border border-gray-200 bg-gray-50 px-4 py-2.5 text-sm dark:border-dark-500 dark:bg-dark-600 dark:text-dark-100"
+                    />
+                  </div>
+                  <div>
+                    <label className="mb-1 block text-sm font-medium text-gray-700 dark:text-dark-200">Diagnóstico *</label>
+                    <textarea
+                      value={historiaForm.diagnostico}
+                      onChange={(e) => setHistoriaForm({ ...historiaForm, diagnostico: e.target.value })}
+                      required
+                      rows={2}
+                      className="w-full rounded-xl border border-gray-200 bg-gray-50 px-4 py-2.5 text-sm dark:border-dark-500 dark:bg-dark-600 dark:text-dark-100"
+                    />
+                  </div>
+                  <div>
+                    <label className="mb-1 block text-sm font-medium text-gray-700 dark:text-dark-200">Observaciones</label>
+                    <textarea
+                      value={historiaForm.observaciones}
+                      onChange={(e) => setHistoriaForm({ ...historiaForm, observaciones: e.target.value })}
+                      rows={2}
+                      className="w-full rounded-xl border border-gray-200 bg-gray-50 px-4 py-2.5 text-sm dark:border-dark-500 dark:bg-dark-600 dark:text-dark-100"
+                    />
+                  </div>
+                  <div>
+                    <label className="mb-1 block text-sm font-medium text-gray-700 dark:text-dark-200">Recomendaciones</label>
+                    <textarea
+                      value={historiaForm.recomendaciones}
+                      onChange={(e) => setHistoriaForm({ ...historiaForm, recomendaciones: e.target.value })}
+                      rows={2}
+                      className="w-full rounded-xl border border-gray-200 bg-gray-50 px-4 py-2.5 text-sm dark:border-dark-500 dark:bg-dark-600 dark:text-dark-100"
+                    />
+                  </div>
+                  <div className="flex gap-3 pt-2">
+                    <button
+                      type="button"
+                      onClick={() => setModalStep("detalle")}
+                      className="flex-1 rounded-xl border border-gray-200 px-4 py-2.5 text-sm font-medium text-gray-600 transition-colors hover:bg-gray-50 dark:border-dark-500 dark:text-dark-200 dark:hover:bg-dark-600"
+                    >
+                      Volver
+                    </button>
+                    <button
+                      type="submit"
+                      disabled={savingHistoria}
+                      className="flex-1 rounded-xl bg-teal-600 px-4 py-2.5 text-sm font-medium text-white shadow-md transition-colors hover:bg-teal-700 disabled:opacity-60"
+                    >
+                      {savingHistoria ? "Guardando..." : "Guardar Historia"}
+                    </button>
+                  </div>
+                </form>
+              )}
+
             </div>
           </div>
         )}

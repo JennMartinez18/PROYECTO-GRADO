@@ -72,7 +72,7 @@ export default function OdontologoInicio() {
             </p>
             <h2 className="mt-1 text-2xl font-bold sm:text-3xl">¡Hola, Dr. {user?.nombre || "Doctor"}!</h2>
             <p className="mt-2 max-w-md text-sm text-teal-200">
-              Resumen de tu actividad en el consultorio odontológico María Luiza Balza
+              Resumen de tu actividad en el consultorio odontológico María Luisa Balza
             </p>
           </div>
         </div>
